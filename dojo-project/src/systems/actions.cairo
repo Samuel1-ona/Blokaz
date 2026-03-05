@@ -253,10 +253,7 @@ pub mod actions {
                 // We mock an objective evaluation:
                 // If ID is 1, let's say it's "Score > 100".
                 // If ID is 2, let's say it's "Combo > 3".
-                loop {
-                    if i >= objective_ids.len() {
-                        break;
-                    }
+                while i < objective_ids.len() {
                     let obj_id = *objective_ids.at(i);
                     let mut obj_state: ObjectiveState = world.read_model((token_id, obj_id));
                     if !obj_state.completed {
