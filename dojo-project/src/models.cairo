@@ -4,7 +4,7 @@ use starknet::ContractAddress;
 #[dojo::model]
 pub struct Game {
     #[key]
-    pub id: u32,
+    pub token_id: u64,
     pub player: ContractAddress,
     pub seed: u256,
     pub score: u32,
@@ -16,13 +16,6 @@ pub struct Game {
     pub mode: u8,
 }
 
-#[derive(Copy, Drop, Serde, Debug)]
-#[dojo::model]
-pub struct GameCounter {
-    #[key]
-    pub id: u32,
-    pub current_val: u32,
-}
 
 #[derive(Copy, Drop, Serde, Debug)]
 #[dojo::model]
@@ -51,4 +44,22 @@ pub struct DailyLeaderboard {
     #[key]
     pub player: ContractAddress,
     pub score: u32,
+}
+
+#[derive(Drop, Serde, Debug)]
+#[dojo::model]
+pub struct GameSettings {
+    #[key]
+    pub settings_id: u32,
+    pub mode: u8,
+}
+
+#[derive(Copy, Drop, Serde, Debug)]
+#[dojo::model]
+pub struct ObjectiveState {
+    #[key]
+    pub token_id: u64,
+    #[key]
+    pub objective_id: u32,
+    pub completed: bool,
 }

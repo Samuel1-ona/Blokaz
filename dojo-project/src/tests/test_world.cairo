@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use blokaz::models::{Game, m_DailyChallenge, m_Game, m_GameCounter, m_PlayerStats};
+    use blokaz::models::{
+        Game, m_DailyChallenge, m_Game, m_GameSettings, m_ObjectiveState, m_PlayerStats,
+    };
     use blokaz::systems::actions::{IActionsDispatcher, IActionsDispatcherTrait, actions};
     use dojo::model::ModelStorage;
     use dojo::world::{WorldStorageTrait, world};
@@ -15,7 +17,8 @@ mod tests {
             namespace: "blokaz",
             resources: [
                 TestResource::Model(m_Game::TEST_CLASS_HASH),
-                TestResource::Model(m_GameCounter::TEST_CLASS_HASH),
+                TestResource::Model(m_GameSettings::TEST_CLASS_HASH),
+                TestResource::Model(m_ObjectiveState::TEST_CLASS_HASH),
                 TestResource::Model(m_PlayerStats::TEST_CLASS_HASH),
                 TestResource::Model(m_DailyChallenge::TEST_CLASS_HASH),
                 TestResource::Event(actions::e_GameStarted::TEST_CLASS_HASH),
@@ -47,10 +50,10 @@ mod tests {
         let (contract_address, _) = world.dns(@"actions").unwrap();
         let actions_system = IActionsDispatcher { contract_address };
 
-        actions_system.start_game();
+        actions_system.start_game(1);
 
-        // GameCounter issues ID 1 for first game
-        let game: Game = world.read_model(1);
+        // First game
+        let game: Game = world.read_model(1_u64);
 
         assert(game.player == caller, 'wrong player');
         assert(game.score == 0, 'wrong score');
@@ -69,16 +72,29 @@ mod tests {
         let (contract_address, _) = world.dns(@"actions").unwrap();
         let actions_system = IActionsDispatcher { contract_address };
 
-        actions_system.start_game();
+        actions_system.start_game(1);
 
-        let game: Game = world.read_model(1); // game_id = 1
+        let game: Game = world.read_model(1_u64); // token_id = 1
         let (b1, b2, b3) = blokaz::utils::unpack_blocks(game.available_blocks);
 
-        // Place the very first random block from the hand at (0, 0)
-        // Works because empty grid has no overlaps and pieces are at most 5x5
-        actions_system.place_block(1, b1, 0, 0);
+        let mut x1: u8 = 0;
+        let mut y1: u8 = 0;
+        loop {
+            if blokaz::grid::can_place(game.grid, blokaz::pieces::get_piece(b1), x1, y1) {
+                actions_system.place_block(1_u64, b1, x1, y1);
+                break;
+            }
+            y1 += 1;
+            if y1 == 8 {
+                y1 = 0;
+                x1 += 1;
+            }
+            if x1 == 8 {
+                break;
+            }
+        }
 
-        let game1: Game = world.read_model(1);
+        let game1: Game = world.read_model(1_u64);
         assert(game1.grid != 0, 'grid should not be empty');
         assert(game1.score > 0, 'score should increase');
         assert(game1.blocks_placed == 1, 'blocks placed should be 1');
@@ -89,10 +105,24 @@ mod tests {
         assert(b2_after == b2, 'b2 changed');
         assert(b3_after == b3, 'b3 changed');
 
-        // Place second block at (5, 5) ensuring it won't overlap with b1 at (0,0)
-        actions_system.place_block(1, b2, 5, 5);
+        let mut x2: u8 = 0;
+        let mut y2: u8 = 0;
+        loop {
+            if blokaz::grid::can_place(game1.grid, blokaz::pieces::get_piece(b2), x2, y2) {
+                actions_system.place_block(1_u64, b2, x2, y2);
+                break;
+            }
+            y2 += 1;
+            if y2 == 8 {
+                y2 = 0;
+                x2 += 1;
+            }
+            if x2 == 8 {
+                break;
+            }
+        }
 
-        let game2: Game = world.read_model(1);
+        let game2: Game = world.read_model(1_u64);
         assert(game2.blocks_placed == 2, 'blocks should be 2');
         assert(game2.score > game1.score, 'score increased again');
     }

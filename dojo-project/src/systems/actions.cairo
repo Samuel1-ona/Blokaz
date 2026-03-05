@@ -1,33 +1,76 @@
 #[starknet::interface]
 pub trait IActions<T> {
-    fn start_game(ref self: T);
-    fn place_block(ref self: T, game_id: u32, piece_id: u8, x: u8, y: u8);
+    fn start_game(ref self: T, token_id: u64);
+    fn place_block(ref self: T, token_id: u64, piece_id: u8, x: u8, y: u8);
 }
 
 #[dojo::contract]
 pub mod actions {
     use blokaz::grid::{can_place, place_piece};
-    use blokaz::models::{Game, GameCounter, PlayerStats};
+    use blokaz::models::{Game, GameSettings, ObjectiveState, PlayerStats};
     use blokaz::pieces::get_piece;
     use blokaz::utils::{next_random, pack_blocks, unpack_blocks};
+    use core::num::traits::Zero;
     use dojo::event::EventStorage;
     use dojo::model::ModelStorage;
+    use game_components_minigame::extensions::objectives::objectives::ObjectivesComponent;
+    use game_components_minigame::extensions::settings::settings::SettingsComponent;
+    use game_components_minigame::interface::{IMinigame, IMinigameTokenData};
+    use game_components_minigame::libs;
+    use game_components_minigame::minigame::MinigameComponent;
+    use openzeppelin_introspection::src5::SRC5Component;
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
     use super::IActions;
+
+    component!(path: MinigameComponent, storage: minigame, event: MinigameEvent);
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
+    component!(path: SettingsComponent, storage: settings, event: SettingsEvent);
+    component!(path: ObjectivesComponent, storage: objectives, event: ObjectivesEvent);
+
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    enum Event {
+        #[flat]
+        MinigameEvent: MinigameComponent::Event,
+        #[flat]
+        SRC5Event: SRC5Component::Event,
+        #[flat]
+        SettingsEvent: SettingsComponent::Event,
+        #[flat]
+        ObjectivesEvent: ObjectivesComponent::Event,
+    }
+
+    #[abi(embed_v0)]
+    impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl MinigameImpl = MinigameComponent::MinigameImpl<ContractState>;
+
+    #[storage]
+    struct Storage {
+        #[substorage(v0)]
+        minigame: MinigameComponent::Storage,
+        #[substorage(v0)]
+        src5: SRC5Component::Storage,
+        #[substorage(v0)]
+        settings: SettingsComponent::Storage,
+        #[substorage(v0)]
+        objectives: ObjectivesComponent::Storage,
+    }
 
     #[derive(Copy, Drop, Serde)]
     #[dojo::event]
     pub struct GameStarted {
         #[key]
         pub player: ContractAddress,
-        pub game_id: u32,
+        pub token_id: u64,
     }
 
     #[derive(Copy, Drop, Serde)]
     #[dojo::event]
     pub struct BlockPlaced {
         #[key]
-        pub game_id: u32,
+        pub token_id: u64,
         pub piece_id: u8,
         pub x: u8,
         pub y: u8,
@@ -35,21 +78,46 @@ pub mod actions {
     }
 
     #[abi(embed_v0)]
+    impl MinigameTokenDataImpl of IMinigameTokenData<ContractState> {
+        fn score(self: @ContractState, token_id: u64) -> u32 {
+            let world = self.world_default();
+            let game: Game = world.read_model(token_id);
+            game.score
+        }
+
+        fn game_over(self: @ContractState, token_id: u64) -> bool {
+            let world = self.world_default();
+            let game: Game = world.read_model(token_id);
+            game.is_over
+        }
+    }
+
+    #[abi(embed_v0)]
     impl ActionsImpl of IActions<ContractState> {
-        fn start_game(ref self: ContractState) {
+        fn start_game(ref self: ContractState, token_id: u64) {
+            let token_addr = IMinigame::token_address(@self);
+            let mut settings_id: u32 = 0;
+            if token_addr.is_non_zero() {
+                libs::assert_token_ownership(token_addr, token_id);
+                libs::pre_action(token_addr, token_id);
+                settings_id =
+                    game_components_minigame::extensions::settings::libs::get_settings_id(
+                        token_addr, token_id,
+                    );
+            }
+
             let mut world = self.world_default();
             let player = get_caller_address();
 
-            // Retrieve or initialize GameCounter
-            let mut counter: GameCounter = world.read_model(1);
-            let next_id = counter.current_val + 1;
-            counter.current_val = next_id;
-            counter.id = 1;
+            // Here we store the detected settings id into the Game session. We can use
+            // settings id offline checking or fetching for specific logic like mode = 1 etc.
+            let mut game_settings = GameSettings { settings_id, mode: 0 };
+            world.write_model(@game_settings);
 
-            let game_id = next_id;
-
-            // Generate seed: simple combination for now
-            let mut seed: u256 = get_block_timestamp().into() + next_id.into();
+            let mut seed: u256 = core::pedersen::pedersen(
+                token_id.into(), get_block_timestamp().into(),
+            )
+                .into();
 
             let b1 = next_random(ref seed);
             let b2 = next_random(ref seed);
@@ -57,7 +125,7 @@ pub mod actions {
             let available_blocks = pack_blocks(b1, b2, b3);
 
             let new_game = Game {
-                id: game_id,
+                token_id,
                 player,
                 seed,
                 score: 0,
@@ -66,19 +134,28 @@ pub mod actions {
                 blocks_placed: 0,
                 available_blocks,
                 is_over: false,
-                mode: 0,
+                mode: game_settings.mode,
             };
 
-            world.write_model(@counter);
             world.write_model(@new_game);
-            world.emit_event(@GameStarted { player, game_id });
+            world.emit_event(@GameStarted { player, token_id });
+
+            if token_addr.is_non_zero() {
+                libs::post_action(token_addr, token_id);
+            }
         }
 
-        fn place_block(ref self: ContractState, game_id: u32, piece_id: u8, x: u8, y: u8) {
+        fn place_block(ref self: ContractState, token_id: u64, piece_id: u8, x: u8, y: u8) {
+            let token_addr = IMinigame::token_address(@self);
+            if token_addr.is_non_zero() {
+                libs::assert_token_ownership(token_addr, token_id);
+                libs::pre_action(token_addr, token_id);
+            }
+
             let mut world = self.world_default();
             let player = get_caller_address();
 
-            let mut game: Game = world.read_model(game_id);
+            let mut game: Game = world.read_model(token_id);
             assert(!game.is_over, 'Game is already over');
             assert(game.player == player, 'Not your game');
 
@@ -164,7 +241,44 @@ pub mod actions {
             }
 
             world.write_model(@game);
-            world.emit_event(@BlockPlaced { game_id, piece_id, x, y, lines_cleared });
+            world.emit_event(@BlockPlaced { token_id, piece_id, x, y, lines_cleared });
+
+            // EGS Objectives Sync
+            if token_addr.is_non_zero() {
+                let objective_ids =
+                    game_components_minigame::extensions::objectives::libs::get_objective_ids(
+                    token_addr, token_id,
+                );
+                let mut i = 0;
+                // We mock an objective evaluation:
+                // If ID is 1, let's say it's "Score > 100".
+                // If ID is 2, let's say it's "Combo > 3".
+                loop {
+                    if i >= objective_ids.len() {
+                        break;
+                    }
+                    let obj_id = *objective_ids.at(i);
+                    let mut obj_state: ObjectiveState = world.read_model((token_id, obj_id));
+                    if !obj_state.completed {
+                        let mut completed = false;
+                        if obj_id == 1 && game.score >= 100 {
+                            completed = true;
+                        } else if obj_id == 2 && game.combo >= 3 {
+                            completed = true;
+                        } else if obj_id == 3 && game.is_over {
+                            completed = true;
+                        }
+
+                        if completed {
+                            obj_state.completed = true;
+                            world.write_model(@obj_state);
+                        }
+                    }
+                    i += 1;
+                }
+
+                libs::post_action(token_addr, token_id);
+            }
         }
     }
 
