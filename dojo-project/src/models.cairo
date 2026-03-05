@@ -2,100 +2,53 @@ use starknet::ContractAddress;
 
 #[derive(Copy, Drop, Serde, Debug)]
 #[dojo::model]
-pub struct Moves {
+pub struct Game {
     #[key]
+    pub id: u32,
     pub player: ContractAddress,
-    pub remaining: u8,
-    pub last_direction: Option<Direction>,
-    pub can_move: bool,
-}
-
-#[derive(Drop, Serde, Debug)]
-#[dojo::model]
-pub struct DirectionsAvailable {
-    #[key]
-    pub player: ContractAddress,
-    pub directions: Array<Direction>,
+    pub seed: u256,
+    pub score: u32,
+    pub grid: u128,
+    pub combo: u8,
+    pub blocks_placed: u8,
+    pub available_blocks: u32,
+    pub is_over: bool,
+    pub mode: u8,
 }
 
 #[derive(Copy, Drop, Serde, Debug)]
 #[dojo::model]
-pub struct Position {
+pub struct GameCounter {
     #[key]
-    pub player: ContractAddress,
-    pub vec: Vec2,
+    pub id: u32,
+    pub current_val: u32,
 }
 
 #[derive(Copy, Drop, Serde, Debug)]
 #[dojo::model]
-pub struct PositionCount {
+pub struct PlayerStats {
     #[key]
-    pub identity: ContractAddress,
-    pub position: Span<(u8, u128)>,
+    pub player: ContractAddress,
+    pub high_score_classic: u32,
+    pub games_played: u32,
+    pub total_score: u128,
 }
 
-#[derive(Serde, Copy, Drop, Introspect, PartialEq, Debug, DojoStore, Default)]
-pub enum Direction {
-    #[default]
-    Left,
-    Right,
-    Up,
-    Down,
+#[derive(Copy, Drop, Serde, Debug)]
+#[dojo::model]
+pub struct DailyChallenge {
+    #[key]
+    pub day_id: u32,
+    pub seed: u256,
+    pub participants_count: u32,
 }
 
-#[derive(Copy, Drop, Serde, IntrospectPacked, Debug, DojoStore)]
-pub struct Vec2 {
-    pub x: u32,
-    pub y: u32,
-}
-
-
-impl DirectionIntoFelt252 of Into<Direction, felt252> {
-    fn into(self: Direction) -> felt252 {
-        match self {
-            Direction::Left => 1,
-            Direction::Right => 2,
-            Direction::Up => 3,
-            Direction::Down => 4,
-        }
-    }
-}
-
-impl OptionDirectionIntoFelt252 of Into<Option<Direction>, felt252> {
-    fn into(self: Option<Direction>) -> felt252 {
-        match self {
-            Option::None => 0,
-            Option::Some(d) => d.into(),
-        }
-    }
-}
-
-#[generate_trait]
-impl Vec2Impl of Vec2Trait {
-    fn is_zero(self: Vec2) -> bool {
-        if self.x - self.y == 0 {
-            return true;
-        }
-        false
-    }
-
-    fn is_equal(self: Vec2, b: Vec2) -> bool {
-        self.x == b.x && self.y == b.y
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Vec2, Vec2Trait};
-
-    #[test]
-    fn test_vec_is_zero() {
-        assert(Vec2Trait::is_zero(Vec2 { x: 0, y: 0 }), 'not zero');
-    }
-
-    #[test]
-    fn test_vec_is_equal() {
-        let position = Vec2 { x: 420, y: 0 };
-        assert(position.is_equal(Vec2 { x: 420, y: 0 }), 'not equal');
-    }
+#[derive(Copy, Drop, Serde, Debug)]
+#[dojo::model]
+pub struct DailyLeaderboard {
+    #[key]
+    pub day_id: u32,
+    #[key]
+    pub player: ContractAddress,
+    pub score: u32,
 }

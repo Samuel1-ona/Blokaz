@@ -1,118 +1,177 @@
-use dojo_starter::models::{Direction, Position};
-
-// define the interface
 #[starknet::interface]
 pub trait IActions<T> {
-    fn spawn(ref self: T);
-    fn move(ref self: T, direction: Direction);
+    fn start_game(ref self: T);
+    fn place_block(ref self: T, game_id: u32, piece_id: u8, x: u8, y: u8);
 }
 
-// dojo decorator
 #[dojo::contract]
 pub mod actions {
+    use blokaz::grid::{can_place, place_piece};
+    use blokaz::models::{Game, GameCounter, PlayerStats};
+    use blokaz::pieces::get_piece;
+    use blokaz::utils::{next_random, pack_blocks, unpack_blocks};
     use dojo::event::EventStorage;
     use dojo::model::ModelStorage;
-    use dojo_starter::models::{Moves, Vec2};
-    use starknet::{ContractAddress, get_caller_address};
-    use super::{Direction, IActions, Position, next_position};
+    use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
+    use super::IActions;
 
     #[derive(Copy, Drop, Serde)]
     #[dojo::event]
-    pub struct Moved {
+    pub struct GameStarted {
         #[key]
         pub player: ContractAddress,
-        pub direction: Direction,
+        pub game_id: u32,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct BlockPlaced {
+        #[key]
+        pub game_id: u32,
+        pub piece_id: u8,
+        pub x: u8,
+        pub y: u8,
+        pub lines_cleared: u8,
     }
 
     #[abi(embed_v0)]
     impl ActionsImpl of IActions<ContractState> {
-        fn spawn(ref self: ContractState) {
-            // Get the default world.
+        fn start_game(ref self: ContractState) {
             let mut world = self.world_default();
-
-            // Get the address of the current caller, possibly the player's address.
             let player = get_caller_address();
-            // Retrieve the player's current position from the world.
-            let position: Position = world.read_model(player);
 
-            // Update the world state with the new data.
+            // Retrieve or initialize GameCounter
+            let mut counter: GameCounter = world.read_model(1);
+            let next_id = counter.current_val + 1;
+            counter.current_val = next_id;
+            counter.id = 1;
 
-            // 1. Move the player's position 10 units in both the x and y direction.
-            let new_position = Position {
-                player, vec: Vec2 { x: position.vec.x + 10, y: position.vec.y + 10 },
+            let game_id = next_id;
+
+            // Generate seed: simple combination for now
+            let mut seed: u256 = get_block_timestamp().into() + next_id.into();
+
+            let b1 = next_random(ref seed);
+            let b2 = next_random(ref seed);
+            let b3 = next_random(ref seed);
+            let available_blocks = pack_blocks(b1, b2, b3);
+
+            let new_game = Game {
+                id: game_id,
+                player,
+                seed,
+                score: 0,
+                grid: 0,
+                combo: 0,
+                blocks_placed: 0,
+                available_blocks,
+                is_over: false,
+                mode: 0,
             };
 
-            // Write the new position to the world.
-            world.write_model(@new_position);
-
-            // 2. Set the player's remaining moves to 100.
-            let moves = Moves {
-                player, remaining: 100, last_direction: Option::None, can_move: true,
-            };
-
-            // Write the new moves to the world.
-            world.write_model(@moves);
+            world.write_model(@counter);
+            world.write_model(@new_game);
+            world.emit_event(@GameStarted { player, game_id });
         }
 
-        // Implementation of the move function for the ContractState struct.
-        fn move(ref self: ContractState, direction: Direction) {
-            // Get the address of the current caller, possibly the player's address.
-
+        fn place_block(ref self: ContractState, game_id: u32, piece_id: u8, x: u8, y: u8) {
             let mut world = self.world_default();
-
             let player = get_caller_address();
 
-            // Retrieve the player's current position and moves data from the world.
-            let position: Position = world.read_model(player);
-            let mut moves: Moves = world.read_model(player);
-            // if player hasn't spawn, read returns model default values. This leads to sub overflow
-            // afterwards.
-            // Plus it's generally considered as a good pratice to fast-return on matching
-            // conditions.
-            if !moves.can_move {
-                return;
+            let mut game: Game = world.read_model(game_id);
+            assert(!game.is_over, 'Game is already over');
+            assert(game.player == player, 'Not your game');
+
+            // Hand Management: Validate piece is in hand
+            let (mut b1, mut b2, mut b3) = unpack_blocks(game.available_blocks);
+            let mut found_in_hand = false;
+
+            if b1 == piece_id {
+                b1 = 255;
+                found_in_hand = true;
+            } else if b2 == piece_id {
+                b2 = 255;
+                found_in_hand = true;
+            } else if b3 == piece_id {
+                b3 = 255;
+                found_in_hand = true;
+            }
+            assert(found_in_hand, 'Piece not in hand');
+
+            // Placement check
+            let piece = get_piece(piece_id);
+            assert(can_place(game.grid, piece, x, y), 'Invalid placement');
+
+            let (new_grid, lines_cleared) = place_piece(game.grid, piece, x, y);
+
+            game.grid = new_grid;
+            game.blocks_placed += 1;
+
+            // Advanced Scoring & Combos
+            if lines_cleared > 0 {
+                game.combo += 1;
+            } else {
+                game.combo = 0;
             }
 
-            // Deduct one from the player's remaining moves.
-            moves.remaining -= 1;
+            let piece_score = piece.width * piece.height;
+            let combo_multiplier = if game.combo > 0 {
+                game.combo
+            } else {
+                1
+            };
+            let line_score = lines_cleared * 10 * combo_multiplier;
+            game.score += piece_score.into() + line_score.into();
 
-            // Update the last direction the player moved in.
-            moves.last_direction = Option::Some(direction);
+            // Refill Hand if empty
+            if b1 == 255 && b2 == 255 && b3 == 255 {
+                b1 = next_random(ref game.seed);
+                b2 = next_random(ref game.seed);
+                b3 = next_random(ref game.seed);
+            }
 
-            // Calculate the player's next position based on the provided direction.
-            let next = next_position(position, moves.last_direction);
+            game.available_blocks = pack_blocks(b1, b2, b3);
 
-            // Write the new position to the world.
-            world.write_model(@next);
+            // Game Over Detection
+            let mut any_valid = false;
+            if b1 != 255 && blokaz::grid::has_valid_move(game.grid, get_piece(b1)) {
+                any_valid = true;
+            }
+            if !any_valid && b2 != 255 && blokaz::grid::has_valid_move(game.grid, get_piece(b2)) {
+                any_valid = true;
+            }
+            if !any_valid && b3 != 255 && blokaz::grid::has_valid_move(game.grid, get_piece(b3)) {
+                any_valid = true;
+            }
 
-            // Write the new moves to the world.
-            world.write_model(@moves);
+            let mut stats: PlayerStats = world.read_model(player);
+            let mut stats_updated = false;
 
-            // Emit an event to the world to notify about the player's move.
-            world.emit_event(@Moved { player, direction });
+            if game.score > stats.high_score_classic {
+                stats.high_score_classic = game.score;
+                stats_updated = true;
+            }
+
+            if !any_valid {
+                game.is_over = true;
+                stats.games_played += 1;
+                stats.total_score += game.score.into();
+                stats_updated = true;
+            }
+
+            if stats_updated {
+                world.write_model(@stats);
+            }
+
+            world.write_model(@game);
+            world.emit_event(@BlockPlaced { game_id, piece_id, x, y, lines_cleared });
         }
     }
 
     #[generate_trait]
     impl InternalImpl of InternalTrait {
-        /// Use the default namespace "dojo_starter". This function is handy since the ByteArray
-        /// can't be const.
         fn world_default(self: @ContractState) -> dojo::world::WorldStorage {
-            self.world(@"dojo_starter")
+            self.world(@"blokaz")
         }
     }
-}
-
-// Define function like this:
-fn next_position(mut position: Position, direction: Option<Direction>) -> Position {
-    match direction {
-        Option::None => { return position; },
-        Option::Some(d) => match d {
-            Direction::Left => { position.vec.x -= 1; },
-            Direction::Right => { position.vec.x += 1; },
-            Direction::Up => { position.vec.y -= 1; },
-            Direction::Down => { position.vec.y += 1; },
-        },
-    }
-    position
 }

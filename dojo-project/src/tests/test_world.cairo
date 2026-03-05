@@ -1,22 +1,25 @@
 #[cfg(test)]
 mod tests {
-    use dojo::model::{ModelStorage, ModelStorageTest};
+    use blokaz::models::{Game, m_DailyChallenge, m_Game, m_GameCounter, m_PlayerStats};
+    use blokaz::systems::actions::{IActionsDispatcher, IActionsDispatcherTrait, actions};
+    use dojo::model::ModelStorage;
     use dojo::world::{WorldStorageTrait, world};
     use dojo_cairo_test::{
         ContractDef, ContractDefTrait, NamespaceDef, TestResource, WorldStorageTestTrait,
         spawn_test_world,
     };
-    use dojo_starter::models::{Direction, Moves, Position, m_Moves, m_Position};
-    use dojo_starter::systems::actions::{IActionsDispatcher, IActionsDispatcherTrait, actions};
     use starknet::ContractAddress;
 
     fn namespace_def() -> NamespaceDef {
         let ndef = NamespaceDef {
-            namespace: "dojo_starter",
+            namespace: "blokaz",
             resources: [
-                TestResource::Model(m_Position::TEST_CLASS_HASH),
-                TestResource::Model(m_Moves::TEST_CLASS_HASH),
-                TestResource::Event(actions::e_Moved::TEST_CLASS_HASH),
+                TestResource::Model(m_Game::TEST_CLASS_HASH),
+                TestResource::Model(m_GameCounter::TEST_CLASS_HASH),
+                TestResource::Model(m_PlayerStats::TEST_CLASS_HASH),
+                TestResource::Model(m_DailyChallenge::TEST_CLASS_HASH),
+                TestResource::Event(actions::e_GameStarted::TEST_CLASS_HASH),
+                TestResource::Event(actions::e_BlockPlaced::TEST_CLASS_HASH),
                 TestResource::Contract(actions::TEST_CLASS_HASH),
             ]
                 .span(),
@@ -27,48 +30,38 @@ mod tests {
 
     fn contract_defs() -> Span<ContractDef> {
         [
-            ContractDefTrait::new(@"dojo_starter", @"actions")
-                .with_writer_of([dojo::utils::bytearray_hash(@"dojo_starter")].span())
+            ContractDefTrait::new(@"blokaz", @"actions")
+                .with_writer_of([dojo::utils::bytearray_hash(@"blokaz")].span())
         ]
             .span()
     }
 
     #[test]
-    fn test_world_test_set() {
-        // Initialize test environment
+    fn test_world_start_game() {
         let caller: ContractAddress = 0.try_into().unwrap();
         let ndef = namespace_def();
 
-        // Register the resources.
         let mut world = spawn_test_world(world::TEST_CLASS_HASH, [ndef].span());
-
-        // Ensures permissions and initializations are synced.
         world.sync_perms_and_inits(contract_defs());
 
-        // Test initial position
-        let mut position: Position = world.read_model(caller);
-        assert(position.vec.x == 0 && position.vec.y == 0, 'initial position wrong');
+        let (contract_address, _) = world.dns(@"actions").unwrap();
+        let actions_system = IActionsDispatcher { contract_address };
 
-        // Test write_model_test
-        position.vec.x = 122;
-        position.vec.y = 88;
+        actions_system.start_game();
 
-        world.write_model_test(@position);
+        // GameCounter issues ID 1 for first game
+        let game: Game = world.read_model(1);
 
-        let mut position: Position = world.read_model(caller);
-        assert(position.vec.y == 88, 'write_value_from_id failed');
-
-        // Test model deletion
-        world.erase_model(@position);
-        let position: Position = world.read_model(caller);
-        assert(position.vec.x == 0 && position.vec.y == 0, 'erase_model failed');
+        assert(game.player == caller, 'wrong player');
+        assert(game.score == 0, 'wrong score');
+        assert(game.grid == 0, 'wrong grid');
+        assert(game.available_blocks != 0, 'hand is empty');
+        assert(game.blocks_placed == 0, 'wrong blocks placed');
     }
 
     #[test]
-    #[available_gas(30000000)]
-    fn test_move() {
-        let caller: ContractAddress = 0.try_into().unwrap();
-
+    fn test_place_block() {
+        let _caller: ContractAddress = 0.try_into().unwrap();
         let ndef = namespace_def();
         let mut world = spawn_test_world(world::TEST_CLASS_HASH, [ndef].span());
         world.sync_perms_and_inits(contract_defs());
@@ -76,24 +69,31 @@ mod tests {
         let (contract_address, _) = world.dns(@"actions").unwrap();
         let actions_system = IActionsDispatcher { contract_address };
 
-        actions_system.spawn();
-        let initial_moves: Moves = world.read_model(caller);
-        let initial_position: Position = world.read_model(caller);
+        actions_system.start_game();
 
-        assert(
-            initial_position.vec.x == 10 && initial_position.vec.y == 10, 'wrong initial position',
-        );
+        let game: Game = world.read_model(1); // game_id = 1
+        let (b1, b2, b3) = blokaz::utils::unpack_blocks(game.available_blocks);
 
-        actions_system.move(Direction::Right.into());
+        // Place the very first random block from the hand at (0, 0)
+        // Works because empty grid has no overlaps and pieces are at most 5x5
+        actions_system.place_block(1, b1, 0, 0);
 
-        let moves: Moves = world.read_model(caller);
-        let right_dir_felt: felt252 = Direction::Right.into();
+        let game1: Game = world.read_model(1);
+        assert(game1.grid != 0, 'grid should not be empty');
+        assert(game1.score > 0, 'score should increase');
+        assert(game1.blocks_placed == 1, 'blocks placed should be 1');
 
-        assert(moves.remaining == initial_moves.remaining - 1, 'moves is wrong');
-        assert(moves.last_direction.unwrap().into() == right_dir_felt, 'last direction is wrong');
+        // Verify piece was removed from hand (set to 255)
+        let (b1_after, b2_after, b3_after) = blokaz::utils::unpack_blocks(game1.available_blocks);
+        assert(b1_after == 255, 'first block not removed');
+        assert(b2_after == b2, 'b2 changed');
+        assert(b3_after == b3, 'b3 changed');
 
-        let new_position: Position = world.read_model(caller);
-        assert(new_position.vec.x == initial_position.vec.x + 1, 'position x is wrong');
-        assert(new_position.vec.y == initial_position.vec.y, 'position y is wrong');
+        // Place second block at (5, 5) ensuring it won't overlap with b1 at (0,0)
+        actions_system.place_block(1, b2, 5, 5);
+
+        let game2: Game = world.read_model(1);
+        assert(game2.blocks_placed == 2, 'blocks should be 2');
+        assert(game2.score > game1.score, 'score increased again');
     }
 }
