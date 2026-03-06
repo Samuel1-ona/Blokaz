@@ -2,6 +2,7 @@
 pub trait IActions<T> {
     fn start_game(ref self: T, token_id: u64);
     fn place_block(ref self: T, token_id: u64, piece_id: u8, x: u8, y: u8);
+    fn delete_block(ref self: T, token_id: u64, x: u8, y: u8);
 }
 
 #[dojo::contract]
@@ -75,6 +76,15 @@ pub mod actions {
         pub x: u8,
         pub y: u8,
         pub lines_cleared: u8,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct BlockDeleted {
+        #[key]
+        pub token_id: u64,
+        pub x: u8,
+        pub y: u8,
     }
 
     #[abi(embed_v0)]
@@ -274,6 +284,34 @@ pub mod actions {
                     i += 1;
                 }
 
+                libs::post_action(token_addr, token_id);
+            }
+        }
+
+        fn delete_block(ref self: ContractState, token_id: u64, x: u8, y: u8) {
+            let token_addr = IMinigame::token_address(@self);
+            if token_addr.is_non_zero() {
+                libs::assert_token_ownership(token_addr, token_id);
+                libs::pre_action(token_addr, token_id);
+            }
+
+            let mut world = self.world_default();
+            let player = get_caller_address();
+
+            let mut game: Game = world.read_model(token_id);
+            assert(!game.is_over, 'Game is already over');
+            assert(game.player == player, 'Not your game');
+            assert(x < 9 && y < 9, 'Out of bounds');
+
+            let mask = blokaz::grid::pow2_128(y * 9 + x);
+            assert((game.grid & mask) == mask, 'Block does not exist');
+
+            game.grid = game.grid - mask;
+
+            world.write_model(@game);
+            world.emit_event(@BlockDeleted { token_id, x, y });
+
+            if token_addr.is_non_zero() {
                 libs::post_action(token_addr, token_id);
             }
         }
