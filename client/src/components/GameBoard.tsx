@@ -1,215 +1,243 @@
-import React, { useRef, useState } from 'react';
-import { Application, Assets, Sprite, Texture, Container as PixiContainer, Graphics } from 'pixi.js';
-
+import React, { useRef, useState, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
 
-const TILE_SIZE = 64;
-const BOARD_SIZE = 9 * TILE_SIZE;
+const BOARD = 9;
+
+const COLOR_HEX: Record<string, string> = {
+  blue:   '#3a7fff',
+  green:  '#2ecc5f',
+  orange: '#ff8c00',
+  purple: '#9b44ff',
+  red:    '#ff3c3c',
+};
+
+const COLOR_GLOW: Record<string, string> = {
+  blue:   'rgba(58,127,255,0.75)',
+  green:  'rgba(46,204,95,0.75)',
+  orange: 'rgba(255,140,0,0.75)',
+  purple: 'rgba(155,68,255,0.75)',
+  red:    'rgba(255,60,60,0.75)',
+};
+
+type GhostCell = { row: number; col: number };
 
 export function GameBoard() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { grid, placeBlock, nextBlocks, selectedBlockIndex, setSelectedBlock } = useGameStore();
-  const [app, setApp] = useState<Application | null>(null);
+  const {
+    colourGrid,
+    placeBlock,
+    canPlaceBlock,
+    nextBlocks,
+    selectedBlockIndex,
+    setSelectedBlock,
+  } = useGameStore();
 
-  React.useEffect(() => {
-    if (!canvasRef.current) return;
+  const boardRef = useRef<HTMLDivElement>(null);
 
-    let isDestroyed = false;
-    const pixiApp = new Application();
+  // ── Ghost / preview state ────────────────────────────────────────
+  // Which shape is currently being dragged (index into nextBlocks)
+  const [ghostShapeIndex, setGhostShapeIndex] = useState<number | null>(null);
+  // Top-left tile the piece would be placed at
+  const [ghostOrigin, setGhostOrigin] = useState<[number, number] | null>(null);
 
-    // Initialize Pixi Application
-    pixiApp.init({
-      canvas: canvasRef.current,
-      width: BOARD_SIZE,
-      height: BOARD_SIZE,
-      backgroundAlpha: 0,
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true,
-    }).then(() => {
-      if (isDestroyed) {
-        pixiApp.destroy(false, { children: true });
-      } else {
-        setApp(pixiApp);
-      }
-    }).catch(console.error);
+  // ── Coordinate helper ────────────────────────────────────────────
+  const clientToTile = useCallback(
+    (clientX: number, clientY: number): [number, number] | null => {
+      const rect = boardRef.current?.getBoundingClientRect();
+      if (!rect) return null;
+      const col = Math.floor(((clientX - rect.left) / rect.width) * BOARD);
+      const row = Math.floor(((clientY - rect.top) / rect.height) * BOARD);
+      if (col < 0 || col >= BOARD || row < 0 || row >= BOARD) return null;
+      return [col, row];
+    },
+    [],
+  );
 
-    return () => {
-      isDestroyed = true;
-      if (pixiApp.renderer) {
-        try {
-          pixiApp.destroy(false, { children: true });
-        } catch (e) {
-          console.warn("Destroy cleanup skipped", e);
-        }
-      }
-    };
-  }, []);
+  // ── Compute ghost cells for the current drag position ────────────
+  const getGhostCells = (): { cells: GhostCell[]; valid: boolean } => {
+    if (ghostShapeIndex === null || ghostOrigin === null) return { cells: [], valid: false };
+    const shape = nextBlocks[ghostShapeIndex];
+    if (!shape) return { cells: [], valid: false };
 
-  React.useEffect(() => {
-    if (!app) return;
+    const [originCol, originRow] = ghostOrigin;
+    const cells: GhostCell[] = [];
 
-    // Clear stage
-    app.stage.removeChildren();
+    shape.matrix.forEach((row, py) =>
+      row.forEach((filled, px) => {
+        if (filled) cells.push({ row: originRow + py, col: originCol + px });
+      }),
+    );
 
-    const loadAssets = async () => {
-      try {
-        const bgTexture = await Assets.load('/grid_empty.png');
-        const bgSprite = new Sprite(bgTexture);
-        bgSprite.width = BOARD_SIZE;
-        bgSprite.height = BOARD_SIZE;
-        app.stage.addChild(bgSprite);
-
-        // Load block textures
-        const textures: Record<string, Texture> = {
-          blue: await Assets.load('/blue_block.png'),
-          green: await Assets.load('/green_block.png'),
-          orange: await Assets.load('/orange_block.png'),
-          purple: await Assets.load('/purple_block.png'),
-          red: await Assets.load('/red_block.png'),
-        };
-
-        const gridContainer = new PixiContainer();
-        app.stage.addChild(gridContainer);
-
-        // Draw placed blocks
-        for (let y = 0; y < 9; y++) {
-          for (let x = 0; x < 9; x++) {
-            const color = grid[y][x];
-            if (color && textures[color]) {
-              const tex = textures[color];
-              const block = new Sprite(tex);
-              block.x = x * TILE_SIZE;
-              block.y = y * TILE_SIZE;
-              block.scale.set(TILE_SIZE / tex.width, TILE_SIZE / tex.height);
-              gridContainer.addChild(block);
-            }
-          }
-        }
-
-      } catch (e) {
-        console.error("Failed to load Pixi textures", e);
-
-        // Fallback drawing if textures fail
-        const graphics = new Graphics();
-
-        // Draw grid lines
-        for (let i = 0; i <= 9; i++) {
-          graphics.moveTo(i * TILE_SIZE, 0);
-          graphics.lineTo(i * TILE_SIZE, BOARD_SIZE);
-          graphics.stroke({ width: 1, color: 0x333333 });
-
-          graphics.moveTo(0, i * TILE_SIZE);
-          graphics.lineTo(BOARD_SIZE, i * TILE_SIZE);
-          graphics.stroke({ width: 1, color: 0x333333 });
-        }
-
-        // Draw basic shapes for existing grid
-        for (let y = 0; y < 9; y++) {
-          for (let x = 0; x < 9; x++) {
-            const color = grid[y][x];
-            if (color) {
-              const hexColor = color === 'red' ? 0xFF0000 :
-                               color === 'blue' ? 0x0000FF :
-                               color === 'green' ? 0x00FF00 :
-                               color === 'orange' ? 0xFFA500 :
-                               0x800080; // purple
-              graphics.rect(x * TILE_SIZE + 2, y * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-              graphics.fill({ color: hexColor });
-            }
-          }
-        }
-        app.stage.addChild(graphics);
-      }
-    };
-
-    loadAssets();
-
-  }, [app, grid]);
-
-  /**
-   * Convert a pointer/drop event position (client coords) to board tile [col, row].
-   * Returns null if outside the canvas.
-   */
-  const clientToTile = (clientX: number, clientY: number): [number, number] | null => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return null;
-
-    const scaleX = BOARD_SIZE / rect.width;
-    const scaleY = BOARD_SIZE / rect.height;
-
-    const x = (clientX - rect.left) * scaleX;
-    const y = (clientY - rect.top) * scaleY;
-
-    const col = Math.floor(x / TILE_SIZE);
-    const row = Math.floor(y / TILE_SIZE);
-
-    if (col < 0 || col >= 9 || row < 0 || row >= 9) return null;
-    return [col, row];
+    const valid = canPlaceBlock(ghostShapeIndex, originCol, originRow);
+    return { cells, valid };
   };
+
+  const { cells: ghostCells, valid: ghostValid } = getGhostCells();
+
+  // Build a Set for O(1) lookup: "r,c"
+  const ghostSet = new Set(ghostCells.map(c => `${c.row},${c.col}`));
 
   // ── Click-to-place ───────────────────────────────────────────────
   const handleBoardClick = (e: React.MouseEvent) => {
     if (selectedBlockIndex === null) return;
-
     const tile = clientToTile(e.clientX, e.clientY);
     if (!tile) return;
-
     const [col, row] = tile;
     const success = placeBlock(selectedBlockIndex, col, row);
-    if (!success) {
-      // Flash cancel: deselect so user can try elsewhere
-      setSelectedBlock(null);
-    }
-    console.log(`Click-place shape ${selectedBlockIndex} at [${col}, ${row}]: ${success ? 'OK' : 'FAIL'}`);
+    if (!success) setSelectedBlock(null);
   };
 
-  // ── Drag-and-drop ────────────────────────────────────────────────
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    try {
-      const dataStr = e.dataTransfer.getData('application/json');
-      if (!dataStr) return;
-
-      const data = JSON.parse(dataStr);
-      const shapeIndex = data.shapeIndex;
-      if (typeof shapeIndex !== 'number') return;
-
-      const tile = clientToTile(e.clientX, e.clientY);
-      if (!tile) return;
-
-      const [col, row] = tile;
-
-      const success = placeBlock(shapeIndex, col, row);
-      console.log(`Drop shape ${shapeIndex} at grid [${col}, ${row}]: ${success ? 'SUCCESS' : 'FAILED'}`);
-    } catch (err) {
-      console.error("Drop failed:", err);
-    }
-  };
-
+  // ── Drag enter/over — update ghost ──────────────────────────────
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
+
+    const tile = clientToTile(e.clientX, e.clientY);
+    if (!tile) {
+      setGhostOrigin(null);
+      return;
+    }
+
+    // The shape index was set in selectedBlockIndex when drag started (NextBlocks sets it)
+    if (selectedBlockIndex !== null) {
+      setGhostShapeIndex(selectedBlockIndex);
+    }
+    setGhostOrigin(tile);
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear when leaving the board entirely (not crossing child cells)
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect) { setGhostOrigin(null); return; }
+    const { clientX: x, clientY: y } = e;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setGhostOrigin(null);
+      setGhostShapeIndex(null);
+    }
+  };
+
+  // ── Drop ────────────────────────────────────────────────────────
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setGhostOrigin(null);
+    setGhostShapeIndex(null);
+
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('application/json'));
+      const shapeIndex: number = data.shapeIndex;
+      if (typeof shapeIndex !== 'number') return;
+      const tile = clientToTile(e.clientX, e.clientY);
+      if (!tile) return;
+      const [col, row] = tile;
+      placeBlock(shapeIndex, col, row);
+    } catch (err) {
+      console.error('Drop failed:', err);
+    }
   };
 
   const isBlockSelected = selectedBlockIndex !== null && nextBlocks[selectedBlockIndex] != null;
 
+  // ── Determine ghost colour ───────────────────────────────────────
+  const ghostColor = ghostValid ? 'rgba(255,255,255,0.30)' : 'rgba(255,60,60,0.35)';
+  const ghostBorder = ghostValid ? '2px solid rgba(255,255,255,0.6)' : '2px solid rgba(255,60,60,0.8)';
+
   return (
     <div
-      className={`relative w-[576px] h-[576px] mx-auto overflow-hidden shadow-[0_0_30px_rgba(0,245,255,0.2)] transition-all
-        ${isBlockSelected ? 'cursor-crosshair ring-2 ring-[var(--color-neon-magenta)] shadow-[0_0_30px_rgba(255,0,255,0.4)]' : 'cursor-default'}`}
+      ref={boardRef}
+      className={`relative w-[576px] h-[576px] mx-auto select-none transition-all rounded-lg overflow-hidden
+        shadow-[0_0_30px_rgba(0,245,255,0.2)]
+        ${isBlockSelected
+          ? 'cursor-crosshair ring-2 ring-[var(--color-neon-magenta)] shadow-[0_0_30px_rgba(255,0,255,0.4)]'
+          : 'cursor-default'
+        }`}
+      style={{ backgroundColor: '#1a1f3c' }}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
       onClick={handleBoardClick}
     >
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full block"
-      />
-      {/* Overlay hint when block is selected */}
-      {isBlockSelected && (
-        <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
+      {/* ── Grid ── */}
+      <div
+        className="absolute inset-0"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${BOARD}, 1fr)`,
+          gridTemplateRows: `repeat(${BOARD}, 1fr)`,
+          gap: '1px',
+          padding: '1px',
+          backgroundColor: '#2a3160',
+        }}
+      >
+        {colourGrid.map((row, y) =>
+          row.map((color, x) => {
+            const filled  = color !== null;
+            const isGhost = ghostSet.has(`${y},${x}`);
+
+            let bg = filled ? COLOR_HEX[color!] : '#151a35';
+            let shadow = filled
+              ? `0 0 8px ${COLOR_GLOW[color!]}, inset 0 1px 0 rgba(255,255,255,0.25)`
+              : 'none';
+            let border = 'none';
+            let borderRadius = filled ? '4px' : '2px';
+
+            if (isGhost && !filled) {
+              bg = ghostColor;
+              border = ghostBorder;
+              borderRadius = '4px';
+              shadow = ghostValid
+                ? '0 0 10px rgba(255,255,255,0.3)'
+                : '0 0 10px rgba(255,60,60,0.5)';
+            } else if (isGhost && filled) {
+              // Collision cell — flash red border on top of existing block
+              border = '2px solid rgba(255,60,60,0.9)';
+              shadow = '0 0 12px rgba(255,60,60,0.7)';
+            }
+
+            return (
+              <div
+                key={`${y}-${x}`}
+                style={{
+                  backgroundColor: bg,
+                  borderRadius,
+                  boxShadow: shadow,
+                  border,
+                  transition: isGhost
+                    ? 'none'                             // instant ghost update
+                    : 'background-color 0.12s ease, box-shadow 0.12s ease',
+                }}
+              />
+            );
+          })
+        )}
+      </div>
+
+      {/* ── "Click to place" hint ── */}
+      {isBlockSelected && ghostOrigin === null && (
+        <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none z-10">
           <span className="text-[10px] bg-black/80 text-[var(--color-neon-magenta)] px-3 py-1 rounded font-['Orbitron'] uppercase tracking-widest animate-pulse">
-            Click to place
+            Click or drag to place
+          </span>
+        </div>
+      )}
+
+      {/* ── Ghost validity badge ── */}
+      {ghostOrigin !== null && ghostCells.length > 0 && (
+        <div className="absolute top-2 left-0 right-0 flex justify-center pointer-events-none z-10">
+          <span
+            className="text-[10px] px-3 py-1 rounded font-['Orbitron'] uppercase tracking-widest"
+            style={{
+              background: ghostValid ? 'rgba(0,200,80,0.85)' : 'rgba(200,0,0,0.85)',
+              color: '#fff',
+              boxShadow: ghostValid
+                ? '0 0 10px rgba(0,255,100,0.5)'
+                : '0 0 10px rgba(255,0,0,0.5)',
+            }}
+          >
+            {ghostValid ? '✓ Place here' : '✗ Can\'t place'}
           </span>
         </div>
       )}
