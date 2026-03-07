@@ -1,1 +1,37 @@
 @import "tailwindcss";
+
+@theme {
+  --color-neon-cyan: #00F5FF;
+  --color-neon-orange: #FF7A00;
+  --color-neon-magenta: #FF2BD6;
+  --color-bg-primary: #070707;
+  --color-panel-bg: #1A1A1A;
+
+  --font-heading: 'Press Start 2P', system-ui;
+  --font-ui: 'Orbitron', system-ui;
+  --font-score: 'Share Tech Mono', monospace;
+}
+
+@layer utilities {
+  .neo-panel {
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 245, 255, 0.2), inset 0 0 10px rgba(0, 245, 255, 0.1);
+    background-color: var(--color-panel-bg);
+  }
+  
+  .text-neon-cyan {
+    color: var(--color-neon-cyan);
+    text-shadow: 0 0 8px rgba(0, 245, 255, 0.6);
+  }
+  
+  .text-neon-orange {
+    color: var(--color-neon-orange);
+    text-shadow: 0 0 8px rgba(255, 122, 0, 0.6);
+  }
+  
+  .text-neon-magenta {
+    color: var(--color-neon-magenta);
+    text-shadow: 0 0 8px rgba(255, 43, 214, 0.6);
+  }
+}
