@@ -1,4 +1,4 @@
-#[derive(Copy, Drop, Serde, Introspect)]
+#[derive(Copy, Drop, Serde)]
 pub struct Piece {
     pub id: u8,
     pub width: u8,
