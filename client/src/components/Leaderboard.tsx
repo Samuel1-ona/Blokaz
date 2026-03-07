@@ -6,29 +6,77 @@ const mockLeaderboard = [
   { rank: 5, name: 'ALEX', score: 54100 },
 ];
 
+const RANK_COLORS = ['#FFE000', '#C0C0C0', '#CD7F32', '#00F5FF', '#8b95b8'];
+const RANK_GLOW   = [
+  'rgba(255,224,0,0.5)',
+  'rgba(192,192,192,0.4)',
+  'rgba(205,127,50,0.4)',
+  'rgba(0,245,255,0.3)',
+  'transparent',
+];
+
 export function Leaderboard() {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex justify-between text-xs font-['Orbitron'] text-gray-500 mb-2 px-2">
-        <span>RANK</span>
-        <span>SCORE</span>
-      </div>
-      
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
       {mockLeaderboard.map((player, idx) => (
-        <div 
-          key={idx} 
-          className={`
-            flex justify-between items-center p-2 rounded
-            ${idx === 0 ? 'bg-[var(--color-neon-magenta)]/20 border border-[var(--color-neon-magenta)]/50 text-[var(--color-neon-magenta)] shadow-[inset_0_0_10px_rgba(255,43,214,0.2)]' : 'text-gray-300'}
-            ${idx === 1 ? 'text-[var(--color-neon-orange)]' : ''}
-            ${idx === 2 ? 'text-[var(--color-neon-cyan)]' : ''}
-          `}
+        <div
+          key={idx}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 8px',
+            borderRadius: '4px',
+            background: idx === 0
+              ? 'linear-gradient(90deg, rgba(255,224,0,0.12), transparent)'
+              : 'rgba(255,255,255,0.02)',
+            border: `1px solid ${idx < 3 ? RANK_COLORS[idx] + '33' : 'rgba(255,255,255,0.05)'}`,
+            boxShadow: idx === 0 ? `0 0 12px ${RANK_GLOW[idx]}` : 'none',
+          }}
         >
-          <div className="flex items-center gap-3">
-            <span className="font-['Press_Start_2P'] text-[10px] w-4">{player.rank}</span>
-            <span className="font-['Orbitron'] font-bold">{player.name}</span>
+          {/* Rank badge */}
+          <div style={{
+            width: '20px',
+            height: '20px',
+            borderRadius: '3px',
+            background: `${RANK_COLORS[idx]}22`,
+            border: `1px solid ${RANK_COLORS[idx]}66`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <span style={{
+              fontFamily: "'Press Start 2P'",
+              fontSize: '7px',
+              color: RANK_COLORS[idx],
+              textShadow: `0 0 6px ${RANK_GLOW[idx]}`,
+            }}>
+              {player.rank}
+            </span>
           </div>
-          <span className="font-['Share_Tech_Mono']">{player.score.toString().padStart(6, '0')}</span>
+
+          {/* Name */}
+          <span style={{
+            fontFamily: 'Orbitron',
+            fontWeight: 700,
+            fontSize: '10px',
+            color: RANK_COLORS[idx],
+            textShadow: `0 0 6px ${RANK_GLOW[idx]}`,
+            flex: 1,
+            letterSpacing: '0.05em',
+          }}>
+            {player.name}
+          </span>
+
+          {/* Score */}
+          <span style={{
+            fontFamily: "'Share Tech Mono', monospace",
+            fontSize: '11px',
+            color: '#c8d0e8',
+          }}>
+            {player.score.toLocaleString()}
+          </span>
         </div>
       ))}
     </div>

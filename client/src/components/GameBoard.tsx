@@ -4,19 +4,19 @@ import { useGameStore } from '../store/gameStore';
 const BOARD = 9;
 
 const COLOR_HEX: Record<string, string> = {
-  blue:   '#4488ff',
-  green:  '#44dd66',
-  orange: '#ff8800',
-  purple: '#aa44ff',
-  red:    '#ff4444',
+  blue:   '#3a7fff',
+  green:  '#2ecc5f',
+  orange: '#ff8c00',
+  purple: '#9b44ff',
+  red:    '#ff3c3c',
 };
 
 const COLOR_GLOW: Record<string, string> = {
-  blue:   'rgba(68,136,255,0.6)',
-  green:  'rgba(68,221,102,0.6)',
-  orange: 'rgba(255,136,0,0.6)',
-  purple: 'rgba(170,68,255,0.6)',
-  red:    'rgba(255,68,68,0.6)',
+  blue:   'rgba(58,127,255,0.75)',
+  green:  'rgba(46,204,95,0.75)',
+  orange: 'rgba(255,140,0,0.75)',
+  purple: 'rgba(155,68,255,0.75)',
+  red:    'rgba(255,60,60,0.75)',
 };
 
 type GhostCell = { row: number; col: number };
