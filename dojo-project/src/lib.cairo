@@ -1,12 +1,9 @@
 pub mod grid;
-pub mod models;
 pub mod pieces;
 pub mod utils;
-pub mod systems {
-    pub mod actions;
-}
+pub mod blokaz;
 
 #[cfg(test)]
 mod tests {
-    mod test_world;
+    mod test_blokaz;
 }
