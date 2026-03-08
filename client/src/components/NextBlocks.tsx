@@ -37,8 +37,9 @@ function BlockPreview({ shape, index, isSelected, cellSize = 22 }: BlockPreviewP
         alignItems: 'center',
         justifyContent: 'center',
         opacity: 0.25,
-        fontFamily: 'Orbitron',
-        fontSize: '8px',
+        fontFamily: 'Rajdhani',
+        fontWeight: 600,
+        fontSize: '11px',
         letterSpacing: '0.15em',
         color: '#6b7494',
         minHeight: '60px',
@@ -132,9 +133,10 @@ function BlockPreview({ shape, index, isSelected, cellSize = 22 }: BlockPreviewP
       {/* Selected badge */}
       {isSelected && (
         <span style={{
-          fontSize: '7px',
+          fontSize: '11px',
           color: '#FF2BD6',
-          fontFamily: 'Orbitron',
+          fontFamily: 'Rajdhani',
+          fontWeight: 700,
           letterSpacing: '0.12em',
           textTransform: 'uppercase',
           textShadow: '0 0 8px rgba(255,43,214,0.9)',

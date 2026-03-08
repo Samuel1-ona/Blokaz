@@ -10,6 +10,7 @@ import { GameOverOverlay } from './components/GameOverOverlay';
 import { useGameActions } from './hooks/useGameActions';
 import { GameActionsContext } from './contexts/GameActionsContext';
 import { useGameStore } from './store/gameStore';
+import { Zap, Target, Sparkles, Trophy } from 'lucide-react';
 
 function App() {
   const { address } = useAccount();
@@ -92,7 +93,7 @@ function App() {
 
   return (
     <GameActionsContext.Provider value={gameActions}>
-      <div className="min-h-screen flex flex-col overflow-hidden" style={{ fontFamily: "'Orbitron', system-ui" }}>
+      <div className="min-h-screen flex flex-col overflow-hidden" style={{ fontFamily: "'Rajdhani', system-ui" }}>
 
         {/* Ambient glow blobs */}
         <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
@@ -101,14 +102,37 @@ function App() {
           <div style={{ position: 'absolute', bottom: '-10%', left: '50%', transform: 'translateX(-50%)', width: '60%', height: '40%', background: 'radial-gradient(circle, rgba(168,85,247,0.07) 0%, transparent 70%)' }} />
         </div>
 
-        {/* Top banner */}
-        <div className="relative z-10 text-center py-1" style={{
-          background: 'linear-gradient(90deg, transparent, rgba(255,140,0,0.15), rgba(255,140,0,0.25), rgba(255,140,0,0.15), transparent)',
-          borderBottom: '1px solid rgba(255,140,0,0.3)',
+        {/* Top banner — arcade marquee style */}
+        <div className="relative z-10" style={{
+          background: 'linear-gradient(90deg, transparent, rgba(255,140,0,0.06) 15%, rgba(255,140,0,0.22) 40%, rgba(255,140,0,0.22) 60%, rgba(255,140,0,0.06) 85%, transparent)',
+          borderBottom: '1px solid rgba(255,140,0,0.45)',
+          borderTop: '1px solid rgba(255,140,0,0.12)',
+          padding: '6px 0 5px',
         }}>
-          <span style={{ fontFamily: "'Orbitron', system-ui", fontWeight: 700, fontSize: '10px', letterSpacing: '0.35em', color: '#FF8C00', textShadow: '0 0 10px rgba(255,140,0,0.7)', textTransform: 'uppercase' }}>
-            Onchain Puzzle Battle
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px' }}>
+            {/* left wing */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '60px', height: '1px', background: 'linear-gradient(90deg, transparent, #FF8C00)' }} />
+              <span style={{ color: '#FF8C00', fontSize: '8px', letterSpacing: '2px', opacity: 0.55 }}>◆◆◆</span>
+            </div>
+            <Zap size={16} color="#FF8C00" style={{ filter: 'drop-shadow(0 0 6px #FF8C00)', flexShrink: 0 }} />
+            <span style={{
+              fontFamily: "'Press Start 2P', system-ui",
+              fontSize: '11px',
+              letterSpacing: '0.35em',
+              color: '#FF8C00',
+              textShadow: '0 0 12px rgba(255,140,0,1), 0 0 28px rgba(255,140,0,0.7), 0 0 55px rgba(255,140,0,0.35)',
+              textTransform: 'uppercase',
+            }}>
+              Onchain Puzzle Battle
+            </span>
+            <Zap size={16} color="#FF8C00" style={{ filter: 'drop-shadow(0 0 6px #FF8C00)', flexShrink: 0 }} />
+            {/* right wing */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#FF8C00', fontSize: '8px', letterSpacing: '2px', opacity: 0.55 }}>◆◆◆</span>
+              <div style={{ width: '60px', height: '1px', background: 'linear-gradient(90deg, #FF8C00, transparent)' }} />
+            </div>
+          </div>
         </div>
 
         {/* Header: Logo centred + wallet right */}
@@ -121,7 +145,6 @@ function App() {
               style={{
                 height: '56px',
                 objectFit: 'contain',
-                filter: 'drop-shadow(0 0 12px rgba(0,245,255,0.7)) drop-shadow(0 0 30px rgba(0,245,255,0.35))',
               }}
               onError={e => {
                 const parent = (e.target as HTMLImageElement).parentElement!;
@@ -152,18 +175,18 @@ function App() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <PlayerStats />
 
-            <div className="arcade-panel" style={{ padding: '12px' }}>
+            <div className="arcade-panel panel-gold" style={{ padding: '12px' }}>
               <div className="panel-label" style={{ margin: '-12px -12px 10px', borderRadius: '4px 4px 0 0' }}>
-                Daily Tournament
+                <Target size={13} strokeWidth={2.5} style={{ flexShrink: 0 }} /> Daily Tournament
               </div>
-              <p style={{ color: '#8b95b8', fontSize: '10px', lineHeight: 1.6, margin: '0 0 10px', fontFamily: 'Orbitron' }}>
+              <p style={{ color: '#8b95b8', fontSize: '13px', lineHeight: 1.6, margin: '0 0 10px', fontFamily: 'Rajdhani', fontWeight: 500 }}>
                 Clear 50 lines for on-chain rewards!
               </p>
               <button style={{
                 width: '100%', padding: '8px',
                 background: 'linear-gradient(135deg, #FF8C00, #FF6600)',
                 border: '1px solid rgba(255,140,0,0.5)', borderRadius: '4px',
-                color: '#000', fontFamily: "'Orbitron', system-ui", fontWeight: 900,
+                color: '#000', fontFamily: "'Rajdhani', system-ui", fontWeight: 900,
                 fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase',
                 cursor: 'pointer', boxShadow: '0 0 15px rgba(255,140,0,0.4)',
               }}>
@@ -188,9 +211,9 @@ function App() {
             </div>
 
             {/* Next Blocks */}
-            <div className="arcade-panel" style={{ width: '100%', overflow: 'hidden' }}>
+            <div className="arcade-panel panel-magenta" style={{ width: '100%', overflow: 'hidden' }}>
               <div className="panel-label" style={{ borderRadius: '4px 4px 0 0' }}>
-                Next Blocks
+                <Sparkles size={13} strokeWidth={2.5} style={{ flexShrink: 0 }} /> Next Blocks
               </div>
               <div style={{ padding: '10px' }}>
                 <NextBlocks layout="horizontal" />
@@ -200,7 +223,7 @@ function App() {
             {/* CTA + Status */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
               {gamePhase === 'DISCONNECTED' ? (
-                <p style={{ fontSize: '10px', color: '#6b7494', fontFamily: 'Orbitron', letterSpacing: '0.1em' }}>
+                <p style={{ fontSize: '13px', color: '#6b7494', fontFamily: 'Rajdhani', fontWeight: 600, letterSpacing: '0.05em' }}>
                   Connect wallet to play onchain
                 </p>
               ) : cta ? (
@@ -216,21 +239,21 @@ function App() {
 
               {/* Error */}
               {error && (
-                <span style={{ fontSize: '9px', color: '#ff6666', fontFamily: 'Orbitron', letterSpacing: '0.1em' }}>
+                <span style={{ fontSize: '12px', color: '#ff6666', fontFamily: 'Rajdhani', fontWeight: 600, letterSpacing: '0.05em' }}>
                   {error}
                 </span>
               )}
 
               {/* Pending message */}
               {pendingMessage && !error && (
-                <span style={{ fontSize: '9px', color: '#00F5FF', letterSpacing: '0.15em', fontFamily: 'Orbitron', textShadow: '0 0 8px rgba(0,245,255,0.6)' }}>
+                <span style={{ fontSize: '12px', color: '#00F5FF', letterSpacing: '0.1em', fontFamily: 'Rajdhani', fontWeight: 600, textShadow: '0 0 8px rgba(0,245,255,0.6)' }}>
                   {pendingMessage}
                 </span>
               )}
 
               {/* Onchain status badge */}
               {showBoard && tokenId !== null && !pendingMessage && (
-                <span style={{ fontSize: '9px', color: '#39FF14', letterSpacing: '0.2em', textShadow: '0 0 8px rgba(57,255,20,0.6)', fontFamily: 'Orbitron' }}>
+                <span style={{ fontSize: '11px', color: '#39FF14', letterSpacing: '0.15em', textShadow: '0 0 8px rgba(57,255,20,0.6)', fontFamily: 'Rajdhani', fontWeight: 600 }}>
                   ONCHAIN · TOKEN {tokenId.slice(0, 8)}...{tokenId.slice(-4)}
                 </span>
               )}
@@ -239,9 +262,9 @@ function App() {
 
           {/* RIGHT COLUMN: Leaderboard */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div className="arcade-panel" style={{ overflow: 'hidden' }}>
+            <div className="arcade-panel panel-gold" style={{ overflow: 'hidden' }}>
               <div className="panel-label" style={{ borderRadius: '4px 4px 0 0' }}>
-                Top 5 Leaderboard
+                <Trophy size={13} strokeWidth={2.5} style={{ flexShrink: 0 }} /> Top 5 Leaderboard
               </div>
               <div style={{ padding: '10px' }}>
                 <Leaderboard />

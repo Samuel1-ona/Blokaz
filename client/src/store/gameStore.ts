@@ -107,18 +107,48 @@ function canPlace(grid: bigint, piece: Piece, x: number, y: number): boolean {
   return (grid & mask) === 0n;
 }
 
-// Convert u128 bitboard to colour grid for rendering
-// Since onchain grid is just bits (no colour info), we assign a default colour
-export function bitGridToColourGrid(grid: bigint): ColourGrid {
+// Convert u128 bitboard to colour grid for rendering.
+// If an existing colourGrid is provided, colours for already-filled cells are
+// preserved (so we don't lose client-side colour info on every chain sync).
+// Cells that are now empty on-chain (e.g. cleared lines) are set to null.
+export function bitGridToColourGrid(
+  grid: bigint,
+  existing?: ColourGrid,
+): ColourGrid {
   const result: ColourGrid = Array.from({ length: BOARD }, () => Array(BOARD).fill(null));
   for (let y = 0; y < BOARD; y++) {
     for (let x = 0; x < BOARD; x++) {
       const bit = BigInt(y * BOARD + x);
       if ((grid >> bit) & 1n) {
-        result[y][x] = 'blue'; // default colour for onchain blocks
+        // Preserve existing client-side colour; fall back to 'blue' for blocks
+        // that were placed before colour tracking was introduced.
+        result[y][x] = existing?.[y]?.[x] ?? 'blue';
       }
     }
   }
+  return result;
+}
+
+// Paint a placed block's colour onto a colour grid (returns a new grid).
+export function applyBlockToColourGrid(
+  colourGrid: ColourGrid,
+  shape: BlockShape,
+  startX: number,
+  startY: number,
+): ColourGrid {
+  // Deep-clone the grid rows that will be touched
+  const result = colourGrid.map(row => [...row]) as ColourGrid;
+  shape.matrix.forEach((row, py) =>
+    row.forEach((filled, px) => {
+      if (filled) {
+        const gy = startY + py;
+        const gx = startX + px;
+        if (gy >= 0 && gy < BOARD && gx >= 0 && gx < BOARD) {
+          result[gy][gx] = shape.color;
+        }
+      }
+    }),
+  );
   return result;
 }
 
@@ -147,6 +177,13 @@ interface GameState {
   nextBlocks: [BlockShape | null, BlockShape | null, BlockShape | null];
   selectedBlockIndex: number | null;
 
+  // Line-clear animation state
+  clearedRows: number[];
+  clearedCols: number[];
+  // Snapshot of the colour grid at the moment lines were cleared (for flash overlay)
+  clearSnapshot: ColourGrid | null;
+  clearLineFlash: () => void;
+
   // Phase actions
   setGamePhase: (phase: GamePhase) => void;
   setPendingMessage: (msg: string | null) => void;
@@ -154,6 +191,9 @@ interface GameState {
   // UI-only actions
   setSelectedBlock: (index: number | null) => void;
   canPlaceBlock: (shapeOrIndex: number | BlockShape, startX: number, startY: number) => boolean;
+
+  // Paint a block's colour optimistically before the tx is confirmed
+  applyOptimisticColor: (shape: BlockShape, startX: number, startY: number) => void;
 
   // Set state from chain reads
   setChainState: (state: {
@@ -179,9 +219,14 @@ export const useGameStore = create<GameState>((set, get) => ({
   gameOver: false,
   nextBlocks: [null, null, null],
   selectedBlockIndex: null,
+  clearedRows: [],
+  clearedCols: [],
+  clearSnapshot: null,
 
   setGamePhase: (phase) => set({ gamePhase: phase }),
   setPendingMessage: (msg) => set({ pendingMessage: msg }),
+
+  clearLineFlash: () => set({ clearedRows: [], clearedCols: [], clearSnapshot: null }),
 
   setSelectedBlock: (index) => set({ selectedBlockIndex: index }),
 
@@ -195,8 +240,43 @@ export const useGameStore = create<GameState>((set, get) => ({
     return canPlace(state.bitGrid, shape.piece, startX, startY);
   },
 
+  applyOptimisticColor: (shape, startX, startY) =>
+    set((state) => ({
+      colourGrid: applyBlockToColourGrid(state.colourGrid, shape, startX, startY),
+    })),
+
   setChainState: (chainState) => {
-    const colourGrid = bitGridToColourGrid(chainState.bitGrid);
+    const oldGrid = get().bitGrid;
+    const oldColourGrid = get().colourGrid;
+
+    // ── Line-clear detection ─────────────────────────────────────────
+    // Cairo clears a row/col in the SAME tx it was completed, so the old
+    // bitGrid never shows a "full" row. The correct signal is:
+    //   hadOccupied  — the row/col had ≥1 cell filled before the move
+    //   nowEmpty     — the row/col is completely absent in the new grid
+    // Together these mean: the move completed and cleared this line.
+    const clearedRows: number[] = [];
+    const clearedCols: number[] = [];
+
+    for (let y = 0; y < BOARD; y++) {
+      let rowMask = 0n;
+      for (let x = 0; x < BOARD; x++) rowMask |= 1n << BigInt(y * BOARD + x);
+      const hadOccupied = (oldGrid & rowMask) !== 0n;  // ≥1 bit was set
+      const nowEmpty    = (chainState.bitGrid & rowMask) === 0n;
+      if (hadOccupied && nowEmpty) clearedRows.push(y);
+    }
+
+    for (let x = 0; x < BOARD; x++) {
+      let colMask = 0n;
+      for (let y = 0; y < BOARD; y++) colMask |= 1n << BigInt(y * BOARD + x);
+      const hadOccupied = (oldGrid & colMask) !== 0n;
+      const nowEmpty    = (chainState.bitGrid & colMask) === 0n;
+      if (hadOccupied && nowEmpty) clearedCols.push(x);
+    }
+
+    // Merge with existing colourGrid so client-side colours survive chain syncs.
+    // Cells that are empty on-chain (e.g. after a line clear) will be null.
+    const colourGrid = bitGridToColourGrid(chainState.bitGrid, get().colourGrid);
     const newBest = Math.max(chainState.score, get().bestScore);
     if (newBest > get().bestScore) {
       localStorage.setItem('blockaz_best', newBest.toString());
@@ -221,7 +301,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       nextBlocks: chainState.nextBlocks,
       selectedBlockIndex: null,
       gamePhase: nextPhase,
+      clearedRows,
+      clearedCols,
+      clearSnapshot: (clearedRows.length > 0 || clearedCols.length > 0) ? oldColourGrid : null,
     });
+
+    // Auto-expire the flash after the animation completes
+    if (clearedRows.length > 0 || clearedCols.length > 0) {
+      setTimeout(() => get().clearLineFlash(), 750);
+    }
   },
 
   resetGame: () =>
@@ -233,5 +321,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       gameOver: false,
       nextBlocks: [null, null, null],
       selectedBlockIndex: null,
+      clearedRows: [],
+      clearedCols: [],
     }),
 }));

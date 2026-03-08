@@ -53,7 +53,7 @@ export function Leaderboard() {
   if (isLoading) {
     return (
       <div style={{ textAlign: 'center', padding: '20px' }}>
-        <span style={{ fontFamily: 'Orbitron', fontSize: '9px', color: '#6b7494', letterSpacing: '0.15em' }}>
+        <span style={{ fontFamily: 'Rajdhani', fontWeight: 600, fontSize: '13px', color: '#6b7494', letterSpacing: '0.1em' }}>
           LOADING...
         </span>
       </div>
@@ -63,7 +63,7 @@ export function Leaderboard() {
   if (sorted.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '20px' }}>
-        <span style={{ fontFamily: 'Orbitron', fontSize: '9px', color: '#6b7494', letterSpacing: '0.15em' }}>
+        <span style={{ fontFamily: 'Rajdhani', fontWeight: 600, fontSize: '13px', color: '#6b7494', letterSpacing: '0.1em' }}>
           NO GAMES YET
         </span>
       </div>
@@ -117,9 +117,9 @@ export function Leaderboard() {
 
             {/* Name */}
             <span style={{
-              fontFamily: 'Orbitron',
+              fontFamily: 'Rajdhani',
               fontWeight: 700,
-              fontSize: '10px',
+              fontSize: '14px',
               color,
               textShadow: `0 0 6px ${glow}`,
               flex: 1,
@@ -133,8 +133,9 @@ export function Leaderboard() {
 
             {/* Score */}
             <span style={{
-              fontFamily: "'Share Tech Mono', monospace",
-              fontSize: '11px',
+              fontFamily: 'Oxanium',
+              fontWeight: 700,
+              fontSize: '13px',
               color: '#c8d0e8',
             }}>
               {token.liveScore.toLocaleString()}

@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Audiowide&family=Rajdhani:wght@500;600;700&family=Oxanium:wght@400;600;700;900&display=swap');
 
 @theme {
   --color-neon-cyan:    #00F5FF;
@@ -20,14 +20,21 @@ body {
   margin: 0;
   background-color: #0d0d0f;
   background-image:
+    /* Dark mask */
+    linear-gradient(rgba(5,7,20,0.82) 0%, rgba(5,7,20,0.82) 100%),
     /* Circuit-board grid */
-    linear-gradient(rgba(0,245,255,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,245,255,0.04) 1px, transparent 1px),
+    linear-gradient(rgba(0,245,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,245,255,0.03) 1px, transparent 1px),
     /* Vignette */
-    radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.85) 100%);
-  background-size: 40px 40px, 40px 40px, 100% 100%;
+    radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.7) 100%),
+    /* Scene image */
+    url('/game-scene.png');
+  background-size: 100% 100%, 40px 40px, 40px 40px, 100% 100%, cover;
+  background-position: center, 0 0, 0 0, center, center;
+  background-repeat: no-repeat, repeat, repeat, no-repeat, no-repeat;
+  background-attachment: fixed, fixed, fixed, fixed, fixed;
   color: #fff;
-  font-family: 'Orbitron', system-ui;
+  font-family: 'Rajdhani', system-ui;
   min-height: 100vh;
   overflow-x: hidden;
 }
@@ -35,39 +42,111 @@ body {
 /* ── Reusable utilities ── */
 @layer utilities {
 
-  /* Metallic arcade panel */
+  /* ── Arcade Panel — gradient border via background-clip ── */
   .arcade-panel {
-    background: linear-gradient(160deg, #1a1f2e 0%, #111318 60%, #0d1020 100%);
-    border: 2px solid #2e3550;
-    border-radius: 6px;
+    /* Dark content bg in the padding box; gradient shows through the transparent border */
+    background:
+      linear-gradient(160deg, #12172a 0%, #0d1020 60%, #090c1a 100%) padding-box,
+      linear-gradient(135deg, rgba(0,245,255,0.55) 0%, rgba(168,85,247,0.30) 50%, rgba(0,245,255,0.20) 100%) border-box;
+    border: 1.5px solid transparent;
+    border-radius: 8px;
     box-shadow:
-      0 0 0 1px #0d1020,
-      inset 0 1px 0 rgba(255,255,255,0.06),
-      0 4px 24px rgba(0,0,0,0.6);
+      0 0 28px rgba(0,245,255,0.07),
+      0 0 60px rgba(168,85,247,0.04),
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 8px 36px rgba(0,0,0,0.75);
     position: relative;
     overflow: hidden;
+    animation: panel-breathe 4s ease-in-out infinite;
+  }
+
+  /* Gold / orange — Daily Tournament, Leaderboard */
+  .arcade-panel.panel-gold {
+    background:
+      linear-gradient(160deg, #1a1508 0%, #110e04 60%, #0a0a03 100%) padding-box,
+      linear-gradient(135deg, rgba(255,210,0,0.65) 0%, rgba(255,100,0,0.35) 50%, rgba(255,210,0,0.20) 100%) border-box;
+    box-shadow:
+      0 0 28px rgba(255,200,0,0.09),
+      0 0 60px rgba(255,100,0,0.05),
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 8px 36px rgba(0,0,0,0.75);
+    animation: panel-breathe-gold 4s ease-in-out infinite;
+  }
+
+  /* Magenta / purple — Next Blocks */
+  .arcade-panel.panel-magenta {
+    background:
+      linear-gradient(160deg, #1a0b1e 0%, #10061a 60%, #09040f 100%) padding-box,
+      linear-gradient(135deg, rgba(255,43,214,0.60) 0%, rgba(168,85,247,0.35) 50%, rgba(255,43,214,0.20) 100%) border-box;
+    box-shadow:
+      0 0 28px rgba(255,43,214,0.09),
+      0 0 60px rgba(168,85,247,0.05),
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 8px 36px rgba(0,0,0,0.75);
+    animation: panel-breathe-magenta 4s ease-in-out infinite;
+  }
+
+  /* Subtle glow breathe animations per color */
+  @keyframes panel-breathe {
+    0%, 100% { box-shadow: 0 0 28px rgba(0,245,255,0.07), 0 0 60px rgba(168,85,247,0.04), inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 36px rgba(0,0,0,0.75); }
+    50%       { box-shadow: 0 0 40px rgba(0,245,255,0.13), 0 0 80px rgba(168,85,247,0.08), inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 36px rgba(0,0,0,0.75); }
+  }
+  @keyframes panel-breathe-gold {
+    0%, 100% { box-shadow: 0 0 28px rgba(255,200,0,0.09), 0 0 60px rgba(255,100,0,0.05), inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 36px rgba(0,0,0,0.75); }
+    50%       { box-shadow: 0 0 40px rgba(255,210,0,0.18), 0 0 80px rgba(255,100,0,0.10), inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 36px rgba(0,0,0,0.75); }
+  }
+  @keyframes panel-breathe-magenta {
+    0%, 100% { box-shadow: 0 0 28px rgba(255,43,214,0.09), 0 0 60px rgba(168,85,247,0.05), inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 36px rgba(0,0,0,0.75); }
+    50%       { box-shadow: 0 0 40px rgba(255,43,214,0.17), 0 0 80px rgba(168,85,247,0.10), inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 36px rgba(0,0,0,0.75); }
   }
 
   .arcade-panel::before {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 50%);
+    background: linear-gradient(135deg, rgba(255,255,255,0.025) 0%, transparent 45%);
     pointer-events: none;
     border-radius: inherit;
+    z-index: 0;
   }
 
-  /* Panel header label */
+  /* Panel header label — colored left-accent bar style */
   .panel-label {
-    font-family: 'Orbitron', system-ui;
+    font-family: 'Audiowide', system-ui;
     font-weight: 700;
     font-size: 9px;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: #6b7494;
-    padding: 6px 10px;
-    background: rgba(0,0,0,0.4);
-    border-bottom: 1px solid #2e3550;
+    /* Cyan default */
+    color: #00F5FF;
+    text-shadow: 0 0 12px rgba(0,245,255,0.7);
+    padding: 7px 12px;
+    background: linear-gradient(90deg, rgba(0,245,255,0.10), rgba(0,245,255,0.03) 60%, transparent);
+    border-bottom: 1px solid rgba(0,245,255,0.18);
+    border-left: 3px solid rgba(0,245,255,0.85);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Gold panel overrides */
+  .panel-gold .panel-label {
+    color: #FFD700;
+    text-shadow: 0 0 12px rgba(255,210,0,0.8);
+    background: linear-gradient(90deg, rgba(255,210,0,0.10), rgba(255,210,0,0.03) 60%, transparent);
+    border-bottom: 1px solid rgba(255,210,0,0.18);
+    border-left: 3px solid rgba(255,210,0,0.9);
+  }
+
+  /* Magenta panel overrides */
+  .panel-magenta .panel-label {
+    color: #FF2BD6;
+    text-shadow: 0 0 12px rgba(255,43,214,0.8);
+    background: linear-gradient(90deg, rgba(255,43,214,0.10), rgba(255,43,214,0.03) 60%, transparent);
+    border-bottom: 1px solid rgba(255,43,214,0.18);
+    border-left: 3px solid rgba(255,43,214,0.9);
   }
 
   /* Neon text helpers */
@@ -79,7 +158,7 @@ body {
 
   /* Score value style */
   .score-value {
-    font-family: 'Orbitron', system-ui;
+    font-family: 'Oxanium', system-ui;
     font-weight: 900;
     line-height: 1;
   }
@@ -92,19 +171,21 @@ body {
   .corner-brackets::after {
     content: '';
     position: absolute;
-    width: 12px;
-    height: 12px;
+    width: 18px;
+    height: 18px;
     border-color: #FF8C00;
     border-style: solid;
-    opacity: 0.8;
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(255,140,0,0.7), 0 0 20px rgba(255,140,0,0.3);
+    z-index: 10;
   }
   .corner-brackets::before {
-    top: -2px; left: -2px;
-    border-width: 2px 0 0 2px;
+    top: -3px; left: -3px;
+    border-width: 3px 0 0 3px;
   }
   .corner-brackets::after {
-    bottom: -2px; right: -2px;
-    border-width: 0 2px 2px 0;
+    bottom: -3px; right: -3px;
+    border-width: 0 3px 3px 0;
   }
 
   /* Scanline overlay */
@@ -159,6 +240,21 @@ body {
   96% { opacity: 0.6; }
   97% { opacity: 1; }
   98% { opacity: 0.7; }
+}
+
+/* Line-clear flash — neon burst then fade */
+@keyframes line-clear-flash {
+  0%   { opacity: 1; background: rgba(255,255,255,0.95); box-shadow: 0 0 20px rgba(255,255,255,1), 0 0 50px rgba(0,245,255,0.9), 0 0 100px rgba(0,245,255,0.5); }
+  25%  { opacity: 1; background: rgba(0,245,255,0.85);  box-shadow: 0 0 30px rgba(0,245,255,1),   0 0 70px rgba(0,245,255,0.7); }
+  65%  { opacity: 0.6; background: rgba(0,245,255,0.3); box-shadow: 0 0 12px rgba(0,245,255,0.5); }
+  100% { opacity: 0;   background: transparent;          box-shadow: none; }
+}
+
+.line-clear-flash {
+  animation: line-clear-flash 0.7s ease-out forwards;
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 10;
 }
 
 .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
