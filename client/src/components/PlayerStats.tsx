@@ -1,5 +1,7 @@
+import { useContext } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { motion, AnimatePresence } from 'framer-motion';
+import { GameActionsContext } from '../contexts/GameActionsContext';
 
 interface StatBoxProps {
   label: string;
@@ -44,7 +46,17 @@ function StatBox({ label, value, valueColor, glowColor }: StatBoxProps) {
 }
 
 export function PlayerStats() {
-  const { score, bestScore, combo, linesCleared, resetGame } = useGameStore();
+  const { score, bestScore, combo, gamePhase } = useGameStore();
+  const gameActions = useContext(GameActionsContext);
+
+  const showReset = gamePhase === 'PLAYING' || gamePhase === 'GAME_OVER';
+  const isLocked = gameActions?.isLocked ?? false;
+
+  const handleReset = () => {
+    if (!gameActions) return;
+    if (!confirm('Start a new game? Current progress will be lost.')) return;
+    gameActions.handleResetGame();
+  };
 
   return (
     <div className="arcade-panel" style={{ overflow: 'hidden' }}>
@@ -65,13 +77,6 @@ export function PlayerStats() {
           value={score.toLocaleString()}
           valueColor="#39FF14"
           glowColor="rgba(57,255,20,0.8)"
-        />
-
-        <StatBox
-          label="Lines Cleared"
-          value={linesCleared.toString()}
-          valueColor="#00F5FF"
-          glowColor="rgba(0,245,255,0.8)"
         />
 
         {/* Combo */}
@@ -100,7 +105,7 @@ export function PlayerStats() {
                   textShadow: '0 0 8px rgba(255,43,214,0.8)',
                   letterSpacing: '0.05em',
                 }}>
-                  STREAK ×{combo}
+                  STREAK x{combo}
                 </div>
                 <div style={{
                   fontFamily: 'Orbitron',
@@ -117,36 +122,42 @@ export function PlayerStats() {
           </AnimatePresence>
         </div>
 
-        <button
-          onClick={resetGame}
-          style={{
-            width: '100%',
-            padding: '7px',
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: '4px',
-            color: '#4a5270',
-            fontFamily: 'Orbitron',
-            fontWeight: 700,
-            fontSize: '8px',
-            letterSpacing: '0.15em',
-            textTransform: 'uppercase',
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => {
-            (e.target as HTMLButtonElement).style.background = 'rgba(255,60,60,0.15)';
-            (e.target as HTMLButtonElement).style.borderColor = 'rgba(255,60,60,0.4)';
-            (e.target as HTMLButtonElement).style.color = '#ff6666';
-          }}
-          onMouseLeave={e => {
-            (e.target as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)';
-            (e.target as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.12)';
-            (e.target as HTMLButtonElement).style.color = '#4a5270';
-          }}
-        >
-          ↺ Reset
-        </button>
+        {showReset && (
+          <button
+            onClick={handleReset}
+            disabled={isLocked}
+            style={{
+              width: '100%',
+              padding: '7px',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '4px',
+              color: isLocked ? '#3a4060' : '#4a5270',
+              fontFamily: 'Orbitron',
+              fontWeight: 700,
+              fontSize: '8px',
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase',
+              cursor: isLocked ? 'not-allowed' : 'pointer',
+              opacity: isLocked ? 0.5 : 1,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => {
+              if (isLocked) return;
+              (e.target as HTMLButtonElement).style.background = 'rgba(255,60,60,0.15)';
+              (e.target as HTMLButtonElement).style.borderColor = 'rgba(255,60,60,0.4)';
+              (e.target as HTMLButtonElement).style.color = '#ff6666';
+            }}
+            onMouseLeave={e => {
+              if (isLocked) return;
+              (e.target as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)';
+              (e.target as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.12)';
+              (e.target as HTMLButtonElement).style.color = '#4a5270';
+            }}
+          >
+            {gamePhase === 'STARTING' ? 'RESTARTING...' : 'Reset'}
+          </button>
+        )}
       </div>
     </div>
   );

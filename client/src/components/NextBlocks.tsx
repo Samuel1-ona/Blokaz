@@ -27,7 +27,8 @@ interface BlockPreviewProps {
 }
 
 function BlockPreview({ shape, index, isSelected, cellSize = 22 }: BlockPreviewProps) {
-  const { setSelectedBlock, selectedBlockIndex } = useGameStore();
+  const { setSelectedBlock, selectedBlockIndex, gamePhase } = useGameStore();
+  const isLocked = gamePhase !== 'PLAYING';
 
   if (!shape) {
     return (
@@ -54,10 +55,12 @@ function BlockPreview({ shape, index, isSelected, cellSize = 22 }: BlockPreviewP
   const cs = maxDim >= 5 ? cellSize - 8 : maxDim >= 4 ? cellSize - 4 : cellSize;
 
   const handleClick = () => {
+    if (isLocked) return;
     setSelectedBlock(selectedBlockIndex === index ? null : index);
   };
 
   const handleDragStart = (e: React.DragEvent) => {
+    if (isLocked) { e.preventDefault(); return; }
     e.dataTransfer.setData('application/json', JSON.stringify({ shapeIndex: index }));
     e.dataTransfer.effectAllowed = 'copyMove';
     setSelectedBlock(index);
@@ -65,7 +68,7 @@ function BlockPreview({ shape, index, isSelected, cellSize = 22 }: BlockPreviewP
 
   return (
     <div
-      draggable
+      draggable={!isLocked}
       onClick={handleClick}
       onDragStart={handleDragStart}
       title={PIECE_NAMES[pieceId] ?? `Piece #${pieceId}`}
@@ -77,8 +80,9 @@ function BlockPreview({ shape, index, isSelected, cellSize = 22 }: BlockPreviewP
         gap: '6px',
         padding: '10px 14px',
         borderRadius: '6px',
-        cursor: 'pointer',
-        transition: 'transform 0.15s, box-shadow 0.15s',
+        cursor: isLocked ? 'default' : 'pointer',
+        opacity: isLocked ? 0.5 : 1,
+        transition: 'transform 0.15s, box-shadow 0.15s, opacity 0.2s',
         border: isSelected
           ? '2px solid #FF2BD6'
           : '2px solid transparent',

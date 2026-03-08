@@ -1,1 +1,3 @@
-
+[sncast.sepolia]
+account = "emperor"
+url = "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_10/RjdHWMEVKEe83UqJZgLfamWOo-ehNo33"
