@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useTokens, useScoreUpdates } from "@provable-games/denshokan-sdk/react";
 import { BLOKAZ_ADDRESS } from "../utils/contract";
 
@@ -16,14 +17,17 @@ function shortenAddress(addr: string): string {
 }
 
 export function Leaderboard() {
-  const { data: tokensResult, isLoading } = useTokens({
+  const { data: tokensResult, isLoading, refetch } = useTokens({
     gameAddress: BLOKAZ_ADDRESS,
     limit: 5,
-    gameOver: false,
   });
 
-  // Real-time score updates via WebSocket
-  useScoreUpdates({ enabled: true });
+  // Real-time score updates via WebSocket — refetch leaderboard on new scores
+  const { lastEvent } = useScoreUpdates({ enabled: true });
+
+  useEffect(() => {
+    if (lastEvent) refetch();
+  }, [lastEvent, refetch]);
 
   const tokens = tokensResult?.data ?? [];
 

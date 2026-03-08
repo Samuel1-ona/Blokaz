@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
-import { useAccount } from '@starknet-react/core';
+import { useEffect, useState } from 'react';
+import { useAccount, useConnect } from '@starknet-react/core';
+import { ControllerConnector } from '@cartridge/connector';
 import { PlayerStats } from './components/PlayerStats';
 import { WalletConnect } from './components/WalletConnect';
 import { NextBlocks } from './components/NextBlocks';
@@ -23,6 +24,15 @@ function App() {
     handleResumeGame,
     handleMintToken,
   } = gameActions;
+
+  const { connectors } = useConnect();
+  const controller = connectors[0] as ControllerConnector;
+  const [username, setUsername] = useState<string>();
+
+  useEffect(() => {
+    if (!address) return;
+    controller.username()?.then(setUsername);
+  }, [address, controller]);
 
   const setGamePhase = useGameStore((s) => s.setGamePhase);
 
@@ -69,7 +79,7 @@ function App() {
           // Resume existing game — don't call start_game which resets the board
           return { label: 'CONTINUE', disabled: false, action: () => handleResumeGame(activeToken.tokenId) };
         }
-        return { label: 'MINT & PLAY', disabled: false, action: () => handleMintToken() };
+        return { label: 'MINT & PLAY', disabled: false, action: () => handleMintToken(username || 'Player') };
       case 'PLAYING':
       case 'PLACING':
       case 'GAME_OVER':
