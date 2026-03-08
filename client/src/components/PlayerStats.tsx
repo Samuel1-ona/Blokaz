@@ -49,7 +49,7 @@ export function PlayerStats() {
   const { score, bestScore, combo, gamePhase } = useGameStore();
   const gameActions = useContext(GameActionsContext);
 
-  const showReset = gamePhase === 'PLAYING' || gamePhase === 'GAME_OVER';
+  const showReset = gamePhase === 'PLAYING' || gamePhase === 'GAME_OVER' || gamePhase === 'STARTING';
   const isLocked = gameActions?.isLocked ?? false;
 
   const handleReset = () => {
