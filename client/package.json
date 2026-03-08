@@ -14,6 +14,7 @@
     "@cartridge/controller": "^0.13.9",
     "@cartridge/presets": "^0.5.2",
     "@pixi/react": "^8.0.5",
+    "@provable-games/denshokan-sdk": "^0.1.12",
     "@starknet-react/chains": "^5.0.3",
     "@starknet-react/core": "^5.0.3",
     "@tailwindcss/vite": "^4.2.1",

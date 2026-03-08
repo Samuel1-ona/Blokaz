@@ -1,6 +1,21 @@
 import { create } from 'zustand';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GAME PHASE STATE MACHINE
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type GamePhase =
+  | 'DISCONNECTED'   // no wallet
+  | 'LOADING'        // wallet connected, fetching tokens
+  | 'IDLE'           // has wallet, no active game (may have playable token)
+  | 'MINTING'        // mint tx in flight
+  | 'AWAITING_MINT'  // mint tx confirmed, polling for new token
+  | 'STARTING'       // start_game tx in flight
+  | 'PLAYING'        // game active, board accepts input
+  | 'PLACING'        // place_block tx in flight, board locked
+  | 'GAME_OVER';     // chain says gameOver=true
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PIECE SYSTEM — mirrors pieces.cairo exactly
 // Layout: bit index = py * width + px, LSB = (0,0) top-left
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,32 +85,15 @@ export interface BlockShape {
   color: Exclude<BlockColor, null>;
 }
 
-function getRandomBlockShape(): BlockShape {
-  const piece = PIECES[Math.floor(Math.random() * PIECES.length)];
-  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
-  return {
-    pieceId: piece.id,
-    piece,
-    matrix: pieceToMatrix(piece),
-    color,
-  };
-}
-
-function getThreeRandomShapes(): [BlockShape | null, BlockShape | null, BlockShape | null] {
-  return [getRandomBlockShape(), getRandomBlockShape(), getRandomBlockShape()];
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// GRID SYSTEM — mirrors grid.cairo exactly
-// 9×9 bitboard stored as a JS BigInt (u128 analogue).
-// bit index = y * 9 + x  (LSB = top-left)
+// GRID HELPERS — used for ghost preview (canPlaceBlock) and rendering
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BOARD = 9;
-const FULL_ROW = (1n << 9n) - 1n; // 0b111111111
 
-// Build the bitmask for piece placed at board (x, y)
-function placePieceMask(piece: Piece, x: number, y: number): bigint {
+// Mirrors can_place() — used client-side for ghost preview only
+function canPlace(grid: bigint, piece: Piece, x: number, y: number): boolean {
+  if (x + piece.width > BOARD || y + piece.height > BOARD) return false;
   let mask = 0n;
   for (let py = 0; py < piece.height; py++) {
     for (let px = 0; px < piece.width; px++) {
@@ -106,51 +104,23 @@ function placePieceMask(piece: Piece, x: number, y: number): bigint {
       }
     }
   }
-  return mask;
-}
-
-// Mirrors can_place()
-function canPlace(grid: bigint, piece: Piece, x: number, y: number): boolean {
-  if (x + piece.width > BOARD || y + piece.height > BOARD) return false;
-  const mask = placePieceMask(piece, x, y);
   return (grid & mask) === 0n;
 }
 
-// Mirrors resolve_clears() — returns [newGrid, linesCleared]
-function resolveClears(grid: bigint): [bigint, number] {
-  let linesCleared = 0;
-  let rowsToClear = 0n;
-  let colsToClear = 0n;
-
-  // Full rows
+// Convert u128 bitboard to colour grid for rendering
+// Since onchain grid is just bits (no colour info), we assign a default colour
+export function bitGridToColourGrid(grid: bigint): ColourGrid {
+  const result: ColourGrid = Array.from({ length: BOARD }, () => Array(BOARD).fill(null));
   for (let y = 0; y < BOARD; y++) {
-    const mask = FULL_ROW << BigInt(y * BOARD);
-    if ((grid & mask) === mask) {
-      rowsToClear |= mask;
-      linesCleared++;
+    for (let x = 0; x < BOARD; x++) {
+      const bit = BigInt(y * BOARD + x);
+      if ((grid >> bit) & 1n) {
+        result[y][x] = 'blue'; // default colour for onchain blocks
+      }
     }
   }
-
-  // Full columns
-  let colMask = 0n;
-  for (let i = 0; i < BOARD; i++) colMask |= 1n << BigInt(i * BOARD); // bit 0 of each row
-  for (let x = 0; x < BOARD; x++) {
-    const mask = colMask << BigInt(x);
-    if ((grid & mask) === mask) {
-      colsToClear |= mask;
-      linesCleared++;
-    }
-  }
-
-  const toClear = rowsToClear | colsToClear;
-  const newGrid = grid - toClear; // safe because toClear ⊆ grid
-  return [newGrid, linesCleared];
+  return result;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COLOUR GRID (derived from bitboard — used by renderer)
-// colourGrid[y][x] → colour string or null
-// ─────────────────────────────────────────────────────────────────────────────
 
 export type ColourGrid = (BlockColor)[][];
 
@@ -158,81 +128,62 @@ function emptyColourGrid(): ColourGrid {
   return Array.from({ length: BOARD }, () => Array(BOARD).fill(null));
 }
 
-// Merge a piece placement into the colour grid
-function applyColourPlacement(
-  colour: ColourGrid,
-  piece: Piece,
-  x: number,
-  y: number,
-  color: Exclude<BlockColor, null>,
-): ColourGrid {
-  const next = colour.map(r => [...r]);
-  for (let py = 0; py < piece.height; py++) {
-    for (let px = 0; px < piece.width; px++) {
-      const bitIdx = py * piece.width + px;
-      if (((piece.layout >> bitIdx) & 1) === 1) {
-        next[y + py][x + px] = color;
-      }
-    }
-  }
-  return next;
-}
-
-// Erase cleared cells from colour grid using the new bitboard
-function syncColourGrid(colour: ColourGrid, newGrid: bigint): ColourGrid {
-  return colour.map((row, y) =>
-    row.map((cell, x) => {
-      const bit = BigInt(y * BOARD + x);
-      return (newGrid >> bit) & 1n ? cell : null;
-    })
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// ZUSTAND STORE
+// ZUSTAND STORE — pure view layer, state set from chain reads
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface GameState {
-  // The authoritative board state (mirrors Cairo u128 grid)
+  // Game phase
+  gamePhase: GamePhase;
+  pendingMessage: string | null;
+
+  // Chain state
   bitGrid: bigint;
-  // Derived colour map for rendering
   colourGrid: ColourGrid;
   score: number;
   bestScore: number;
-  linesCleared: number; // total lines (rows + cols) cleared this game
   combo: number;
+  gameOver: boolean;
   nextBlocks: [BlockShape | null, BlockShape | null, BlockShape | null];
   selectedBlockIndex: number | null;
 
-  // Actions
+  // Phase actions
+  setGamePhase: (phase: GamePhase) => void;
+  setPendingMessage: (msg: string | null) => void;
+
+  // UI-only actions
   setSelectedBlock: (index: number | null) => void;
   canPlaceBlock: (shapeOrIndex: number | BlockShape, startX: number, startY: number) => boolean;
-  placeBlock: (shapeIndex: number, startX: number, startY: number) => boolean;
+
+  // Set state from chain reads
+  setChainState: (state: {
+    bitGrid: bigint;
+    score: number;
+    combo: number;
+    gameOver: boolean;
+    nextBlocks: [BlockShape | null, BlockShape | null, BlockShape | null];
+  }) => void;
+
+  // Clear everything
   resetGame: () => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
+  gamePhase: 'DISCONNECTED',
+  pendingMessage: null,
   bitGrid: 0n,
   colourGrid: emptyColourGrid(),
   score: 0,
   bestScore: parseInt(localStorage.getItem('blockaz_best') || '0', 10),
-  linesCleared: 0,
-  combo: 1,
-  nextBlocks: getThreeRandomShapes(),
+  combo: 0,
+  gameOver: false,
+  nextBlocks: [null, null, null],
   selectedBlockIndex: null,
 
-  setSelectedBlock: (index) => set({ selectedBlockIndex: index }),
+  setGamePhase: (phase) => set({ gamePhase: phase }),
+  setPendingMessage: (msg) => set({ pendingMessage: msg }),
 
-  resetGame: () =>
-    set({
-      bitGrid: 0n,
-      colourGrid: emptyColourGrid(),
-      score: 0,
-      linesCleared: 0,
-      combo: 1,
-      nextBlocks: getThreeRandomShapes(),
-      selectedBlockIndex: null,
-    }),
+  setSelectedBlock: (index) => set({ selectedBlockIndex: index }),
 
   canPlaceBlock: (shapeOrIndex, startX, startY) => {
     const state = get();
@@ -244,76 +195,43 @@ export const useGameStore = create<GameState>((set, get) => ({
     return canPlace(state.bitGrid, shape.piece, startX, startY);
   },
 
-  placeBlock: (shapeIndex, startX, startY) => {
-    const state = get();
-    const shape = state.nextBlocks[shapeIndex];
-    if (!shape) return false;
-    if (!canPlace(state.bitGrid, shape.piece, startX, startY)) return false;
-
-    // 1. Place piece on bitboard
-    const mask = placePieceMask(shape.piece, startX, startY);
-    const placedGrid = state.bitGrid | mask;
-
-    // 2. Apply colour
-    let newColour = applyColourPlacement(
-      state.colourGrid,
-      shape.piece,
-      startX,
-      startY,
-      shape.color,
-    );
-
-    // 3. Count placed tiles for score
-    const tilesPlaced = shape.piece.layout
-      .toString(2)
-      .split('')
-      .filter(b => b === '1').length;
-
-    // 4. Resolve clears (mirrors resolve_clears)
-    const [clearedGrid, linesThisMove] = resolveClears(placedGrid);
-
-    // 5. Re-sync colour grid
-    if (linesThisMove > 0) {
-      newColour = syncColourGrid(newColour, clearedGrid);
-    }
-
-    // 6. Refill next blocks
-    const newNextBlocks = [...state.nextBlocks] as GameState['nextBlocks'];
-    newNextBlocks[shapeIndex] = null;
-    if (newNextBlocks.every(b => b === null)) {
-      newNextBlocks[0] = getRandomBlockShape();
-      newNextBlocks[1] = getRandomBlockShape();
-      newNextBlocks[2] = getRandomBlockShape();
-    }
-
-    // 7. Scoring: tiles placed + line clears
-    const comboMultiplier = state.combo;
-    const tilePts = tilesPlaced * 10;
-    const linePts = linesThisMove * 100 * comboMultiplier;
-    const scoreGain = tilePts + linePts;
-    const newScore = state.score + scoreGain;
-    const newBest = Math.max(newScore, state.bestScore);
-    if (newBest > state.bestScore) {
+  setChainState: (chainState) => {
+    const colourGrid = bitGridToColourGrid(chainState.bitGrid);
+    const newBest = Math.max(chainState.score, get().bestScore);
+    if (newBest > get().bestScore) {
       localStorage.setItem('blockaz_best', newBest.toString());
     }
 
-    // Combo: increases when lines are cleared
-    const newCombo =
-      linesThisMove > 0
-        ? state.combo + (linesThisMove > 1 ? linesThisMove : 1)
-        : 1;
+    // Auto-transition game phase based on chain state
+    const currentPhase = get().gamePhase;
+    let nextPhase = currentPhase;
+    if (chainState.gameOver) {
+      nextPhase = 'GAME_OVER';
+    } else if (currentPhase === 'STARTING' || currentPhase === 'PLACING') {
+      nextPhase = 'PLAYING';
+    }
 
     set({
-      bitGrid: clearedGrid,
-      colourGrid: newColour,
-      score: newScore,
+      bitGrid: chainState.bitGrid,
+      colourGrid,
+      score: chainState.score,
       bestScore: newBest,
-      linesCleared: state.linesCleared + linesThisMove,
-      combo: newCombo,
-      nextBlocks: newNextBlocks,
+      combo: chainState.combo,
+      gameOver: chainState.gameOver,
+      nextBlocks: chainState.nextBlocks,
       selectedBlockIndex: null,
+      gamePhase: nextPhase,
     });
-
-    return true;
   },
+
+  resetGame: () =>
+    set({
+      bitGrid: 0n,
+      colourGrid: emptyColourGrid(),
+      score: 0,
+      combo: 0,
+      gameOver: false,
+      nextBlocks: [null, null, null],
+      selectedBlockIndex: null,
+    }),
 }));

@@ -1,5 +1,6 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useContext } from 'react';
 import { useGameStore } from '../store/gameStore';
+import { GameActionsContext } from '../contexts/GameActionsContext';
 
 const BOARD = 9;
 
@@ -24,12 +25,24 @@ type GhostCell = { row: number; col: number };
 export function GameBoard() {
   const {
     colourGrid,
-    placeBlock,
     canPlaceBlock,
     nextBlocks,
     selectedBlockIndex,
     setSelectedBlock,
+    gamePhase,
+    pendingMessage,
   } = useGameStore();
+
+  // Use context for onchain placement
+  const gameActions = useContext(GameActionsContext);
+  const placeBlock = useCallback(
+    (shapeIndex: number, col: number, row: number) => {
+      if (gameActions) {
+        gameActions.handlePlaceBlock(shapeIndex, col, row);
+      }
+    },
+    [gameActions],
+  );
 
   const boardRef = useRef<HTMLDivElement>(null);
 
@@ -76,14 +89,21 @@ export function GameBoard() {
   // Build a Set for O(1) lookup: "r,c"
   const ghostSet = new Set(ghostCells.map(c => `${c.row},${c.col}`));
 
+  const isLocked = gamePhase !== 'PLAYING';
+
   // ── Click-to-place ───────────────────────────────────────────────
   const handleBoardClick = (e: React.MouseEvent) => {
+    if (isLocked) return;
     if (selectedBlockIndex === null) return;
     const tile = clientToTile(e.clientX, e.clientY);
     if (!tile) return;
     const [col, row] = tile;
-    const success = placeBlock(selectedBlockIndex, col, row);
-    if (!success) setSelectedBlock(null);
+    if (!canPlaceBlock(selectedBlockIndex, col, row)) {
+      setSelectedBlock(null);
+      return;
+    }
+    placeBlock(selectedBlockIndex, col, row);
+    setSelectedBlock(null);
   };
 
   // ── Drag enter/over — update ghost ──────────────────────────────
@@ -122,6 +142,7 @@ export function GameBoard() {
   // ── Drop ────────────────────────────────────────────────────────
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    if (isLocked) return;
     setGhostOrigin(null);
     setGhostShapeIndex(null);
 
@@ -149,11 +170,16 @@ export function GameBoard() {
       ref={boardRef}
       className={`relative w-[576px] h-[576px] mx-auto select-none transition-all rounded-lg overflow-hidden
         shadow-[0_0_30px_rgba(0,245,255,0.2)]
-        ${isBlockSelected
+        ${isBlockSelected && !isLocked
           ? 'cursor-crosshair ring-2 ring-[var(--color-neon-magenta)] shadow-[0_0_30px_rgba(255,0,255,0.4)]'
           : 'cursor-default'
         }`}
-      style={{ backgroundColor: '#1a1f3c' }}
+      style={{
+        backgroundColor: '#1a1f3c',
+        pointerEvents: isLocked ? 'none' : 'auto',
+        opacity: isLocked ? 0.6 : 1,
+        transition: 'opacity 0.2s ease',
+      }}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
@@ -238,6 +264,20 @@ export function GameBoard() {
             }}
           >
             {ghostValid ? '✓ Place here' : '✗ Can\'t place'}
+          </span>
+        </div>
+      )}
+
+      {/* ── Pending overlay ── */}
+      {isLocked && pendingMessage && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
+          style={{ background: 'rgba(0,0,0,0.4)' }}
+        >
+          <span
+            className="text-[11px] px-4 py-2 rounded font-['Orbitron'] uppercase tracking-widest animate-pulse"
+            style={{ color: '#00F5FF', textShadow: '0 0 10px rgba(0,245,255,0.8)' }}
+          >
+            {pendingMessage}
           </span>
         </div>
       )}
