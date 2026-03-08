@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useTokens, useScoreUpdates } from "@provable-games/denshokan-sdk/react";
+import { useEffect, useMemo } from "react";
+import { useTokens, useScoreUpdates, useScoreBatch } from "@provable-games/denshokan-sdk/react";
 import { BLOKAZ_ADDRESS } from "../utils/contract";
 
 const RANK_COLORS = ['#FFE000', '#C0C0C0', '#CD7F32', '#00F5FF', '#8b95b8'];
@@ -22,17 +22,33 @@ export function Leaderboard() {
     limit: 5,
   });
 
-  // Real-time score updates via WebSocket — refetch leaderboard on new scores
+  const tokens = tokensResult?.data ?? [];
+
+  // Read scores directly from the Blokaz contract (bypasses stale Denshokan indexer)
+  const tokenIds = useMemo(() => tokens.map(t => t.tokenId), [tokens]);
+  const { data: liveScores, refetch: refetchScores } = useScoreBatch(
+    tokenIds.length > 0 ? tokenIds : undefined,
+    BLOKAZ_ADDRESS,
+  );
+
+  // Real-time score updates via WebSocket — refetch both tokens and scores
   const { lastEvent } = useScoreUpdates({ enabled: true });
 
   useEffect(() => {
-    if (lastEvent) refetch();
-  }, [lastEvent, refetch]);
+    if (lastEvent) {
+      refetch();
+      refetchScores();
+    }
+  }, [lastEvent, refetch, refetchScores]);
 
-  const tokens = tokensResult?.data ?? [];
-
-  // Sort by score descending
-  const sorted = [...tokens].sort((a, b) => b.score - a.score);
+  // Merge live scores into tokens and sort descending
+  const sorted = useMemo(() => {
+    const merged = tokens.map((token, i) => ({
+      ...token,
+      liveScore: liveScores ? Number(liveScores[i]) : token.score,
+    }));
+    return merged.sort((a, b) => b.liveScore - a.liveScore);
+  }, [tokens, liveScores]);
 
   if (isLoading) {
     return (
@@ -121,7 +137,7 @@ export function Leaderboard() {
               fontSize: '11px',
               color: '#c8d0e8',
             }}>
-              {token.score.toLocaleString()}
+              {token.liveScore.toLocaleString()}
             </span>
           </div>
         );
