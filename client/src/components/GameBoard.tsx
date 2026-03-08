@@ -171,7 +171,7 @@ export function GameBoard() {
   return (
     <div
       ref={boardRef}
-      className={`relative w-[576px] h-[576px] mx-auto select-none transition-all rounded-lg overflow-hidden
+      className={`relative w-full max-w-[576px] aspect-square mx-auto select-none transition-all rounded-lg overflow-hidden
         shadow-[0_0_30px_rgba(0,245,255,0.2)]
         ${isBlockSelected && !isLocked
           ? 'cursor-crosshair ring-2 ring-[var(--color-neon-magenta)] shadow-[0_0_30px_rgba(255,0,255,0.4)]'

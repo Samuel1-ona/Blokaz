@@ -259,3 +259,87 @@ body {
 
 .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
 .animate-flicker    { animation: flicker 6s infinite; }
+
+/* ══════════════════════════════════════════════
+   RESPONSIVE LAYOUT
+══════════════════════════════════════════════ */
+
+/* ── Banner ── */
+.banner-marquee {
+  background: linear-gradient(90deg, transparent, rgba(255,140,0,0.06) 15%, rgba(255,140,0,0.22) 40%, rgba(255,140,0,0.22) 60%, rgba(255,140,0,0.06) 85%, transparent);
+  border-bottom: 1px solid rgba(255,140,0,0.45);
+  border-top: 1px solid rgba(255,140,0,0.12);
+  padding: 5px 12px;
+}
+.banner-title {
+  font-family: 'Press Start 2P', system-ui;
+  font-size: 11px;
+  letter-spacing: 0.35em;
+  color: #FF8C00;
+  text-shadow: 0 0 12px rgba(255,140,0,1), 0 0 28px rgba(255,140,0,0.7), 0 0 55px rgba(255,140,0,0.35);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.banner-wing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.banner-wing-right { justify-content: flex-end; }
+
+/* ── Logo ── */
+.app-logo {
+  height: 52px;
+  object-fit: contain;
+}
+
+/* ── Desktop layout ── */
+.desktop-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr 220px;
+  gap: 12px;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+  align-items: start;
+}
+.mobile-layout   { display: none; }
+.mobile-bottom-nav { display: none; }
+
+/* ══ MOBILE (< 768px) ══ */
+@media (max-width: 767px) {
+
+  /* Hide desktop, show mobile */
+  .desktop-layout    { display: none !important; }
+  .mobile-layout     { display: block !important; }
+  .mobile-bottom-nav { display: flex !important; }
+
+  /* Banner — shrink text */
+  .banner-title {
+    font-size: 7px;
+    letter-spacing: 0.15em;
+  }
+  .banner-wing { display: none; }
+
+  /* Logo smaller */
+  .app-logo { height: 38px; }
+
+  /* Bottom nav */
+  .mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(8, 10, 22, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(0,245,255,0.18);
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.7), 0 -1px 0 rgba(0,245,255,0.08);
+    height: 64px;
+    align-items: stretch;
+  }
+}
+
