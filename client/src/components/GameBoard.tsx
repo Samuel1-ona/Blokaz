@@ -4,12 +4,12 @@ import { GameActionsContext } from '../contexts/GameActionsContext';
 
 const BOARD = 9;
 
-const COLOR_HEX: Record<string, string> = {
-  blue:   '#3a7fff',
-  green:  '#2ecc5f',
-  orange: '#ff8c00',
-  purple: '#9b44ff',
-  red:    '#ff3c3c',
+const BLOCK_IMG: Record<string, string> = {
+  blue:   '/blue_block.png',
+  green:  '/green_block.png',
+  orange: '/orange_block.png',
+  purple: '/purple_block.png',
+  red:    '/red_block.png',
 };
 
 const COLOR_GLOW: Record<string, string> = {
@@ -31,6 +31,9 @@ export function GameBoard() {
     setSelectedBlock,
     gamePhase,
     pendingMessage,
+    clearedRows,
+    clearedCols,
+    clearSnapshot,
   } = useGameStore();
 
   // Use context for onchain placement
@@ -203,39 +206,99 @@ export function GameBoard() {
             const filled  = color !== null;
             const isGhost = ghostSet.has(`${y},${x}`);
 
-            let bg = filled ? COLOR_HEX[color!] : '#151a35';
-            let shadow = filled
-              ? `0 0 8px ${COLOR_GLOW[color!]}, inset 0 1px 0 rgba(255,255,255,0.25)`
-              : 'none';
-            let border = 'none';
-            let borderRadius = filled ? '4px' : '2px';
-
-            if (isGhost && !filled) {
-              bg = ghostColor;
-              border = ghostBorder;
-              borderRadius = '4px';
-              shadow = ghostValid
-                ? '0 0 10px rgba(255,255,255,0.3)'
-                : '0 0 10px rgba(255,60,60,0.5)';
-            } else if (isGhost && filled) {
-              // Collision cell — flash red border on top of existing block
-              border = '2px solid rgba(255,60,60,0.9)';
-              shadow = '0 0 12px rgba(255,60,60,0.7)';
-            }
+            // Check if this cell is on a cleared row or column
+            const isFlashRow = clearedRows.includes(y);
+            const isFlashCol = clearedCols.includes(x);
+            const isFlashing = isFlashRow || isFlashCol;
+            // Stagger delay: sweep left-to-right for rows, top-to-bottom for cols
+            const flashDelay = isFlashRow
+              ? `${x * 28}ms`
+              : isFlashCol
+                ? `${y * 28}ms`
+                : '0ms';
 
             return (
               <div
                 key={`${y}-${x}`}
                 style={{
-                  backgroundColor: bg,
-                  borderRadius,
-                  boxShadow: shadow,
-                  border,
+                  backgroundColor: isGhost
+                    ? 'transparent'
+                    : filled ? 'transparent' : '#151a35',
+                  borderRadius: filled ? '3px' : '2px',
+                  boxShadow: isGhost
+                    ? (ghostValid
+                        ? '0 0 10px rgba(255,255,255,0.3)'
+                        : '0 0 10px rgba(255,60,60,0.5)')
+                    : filled
+                      ? `0 0 8px ${COLOR_GLOW[color!]}`
+                      : 'none',
+                  border: isGhost
+                    ? ghostBorder
+                    : (isGhost && filled) ? '2px solid rgba(255,60,60,0.9)' : 'none',
+                  position: 'relative',
+                  overflow: 'visible',
                   transition: isGhost
-                    ? 'none'                             // instant ghost update
-                    : 'background-color 0.12s ease, box-shadow 0.12s ease',
+                    ? 'none'
+                    : 'box-shadow 0.12s ease',
                 }}
-              />
+              >
+                {/* Filled block — render the color PNG */}
+                {filled && !isGhost && (
+                  <img
+                    src={BLOCK_IMG[color!]}
+                    alt={color!}
+                    draggable={false}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      display: 'block',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                )}
+                {/* Ghost overlay */}
+                {isGhost && (
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    backgroundColor: ghostColor,
+                    borderRadius: '4px',
+                  }} />
+                )}
+                {/* Line-clear flash overlay — renders the old block image then bursts */}
+                {isFlashing && (
+                  <div
+                    className="line-clear-flash"
+                    style={{
+                      position: 'absolute',
+                      inset: '-1px',
+                      animationDelay: flashDelay,
+                    }}
+                  >
+                    {/* Show the original block image underneath the neon burst */}
+                    {(() => {
+                      const snapColor = clearSnapshot?.[y]?.[x];
+                      return snapColor ? (
+                        <img
+                          src={BLOCK_IMG[snapColor]}
+                          alt=""
+                          draggable={false}
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            pointerEvents: 'none',
+                            opacity: 0.6,
+                          }}
+                        />
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+              </div>
             );
           })
         )}
@@ -244,7 +307,7 @@ export function GameBoard() {
       {/* ── "Click to place" hint ── */}
       {isBlockSelected && ghostOrigin === null && (
         <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none z-10">
-          <span className="text-[10px] bg-black/80 text-[var(--color-neon-magenta)] px-3 py-1 rounded font-['Orbitron'] uppercase tracking-widest animate-pulse">
+          <span className="text-[12px] bg-black/80 text-[var(--color-neon-magenta)] px-3 py-1 rounded font-['Rajdhani'] font-semibold uppercase tracking-widest animate-pulse">
             Click or drag to place
           </span>
         </div>
@@ -254,7 +317,7 @@ export function GameBoard() {
       {ghostOrigin !== null && ghostCells.length > 0 && (
         <div className="absolute top-2 left-0 right-0 flex justify-center pointer-events-none z-10">
           <span
-            className="text-[10px] px-3 py-1 rounded font-['Orbitron'] uppercase tracking-widest"
+            className="text-[12px] font-semibold tracking-widest"
             style={{
               background: ghostValid ? 'rgba(0,200,80,0.85)' : 'rgba(200,0,0,0.85)',
               color: '#fff',
@@ -274,7 +337,7 @@ export function GameBoard() {
           style={{ background: 'rgba(0,0,0,0.4)' }}
         >
           <span
-            className="text-[11px] px-4 py-2 rounded font-['Orbitron'] uppercase tracking-widest animate-pulse"
+            className="text-[12px] px-4 py-2 rounded font-['Rajdhani'] font-semibold uppercase tracking-widest animate-pulse"
             style={{ color: '#00F5FF', textShadow: '0 0 10px rgba(0,245,255,0.8)' }}
           >
             {pendingMessage}

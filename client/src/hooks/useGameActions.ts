@@ -188,6 +188,11 @@ export function useGameActions() {
       setError(null);
       setGamePhase('PLACING');
       setPendingMessage('Placing block...');
+
+      // Optimistically paint the block's colour onto the grid immediately so
+      // the player sees the right colour without waiting for the chain round-trip.
+      useGameStore.getState().applyOptimisticColor(shape, startX, startY);
+
       try {
         await placeBlockOnchain(tokenId, shape.pieceId, startX, startY);
         await syncFromChain(tokenId);

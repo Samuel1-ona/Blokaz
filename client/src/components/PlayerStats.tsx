@@ -2,9 +2,10 @@ import { useContext } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GameActionsContext } from '../contexts/GameActionsContext';
+import { Zap, Trophy, TrendingUp } from 'lucide-react';
 
 interface StatBoxProps {
-  label: string;
+  label: React.ReactNode;
   value: string;
   valueColor: string;
   glowColor: string;
@@ -20,10 +21,10 @@ function StatBox({ label, value, valueColor, glowColor }: StatBoxProps) {
       boxShadow: `inset 0 0 12px ${glowColor}11`,
     }}>
       <div style={{
-        fontFamily: 'Orbitron',
+        fontFamily: 'Audiowide',
         fontWeight: 700,
         fontSize: '8px',
-        letterSpacing: '0.2em',
+        letterSpacing: '0.15em',
         color: '#6b7494',
         textTransform: 'uppercase',
         marginBottom: '4px',
@@ -31,7 +32,7 @@ function StatBox({ label, value, valueColor, glowColor }: StatBoxProps) {
         {label}
       </div>
       <div style={{
-        fontFamily: 'Orbitron',
+        fontFamily: 'Oxanium',
         fontWeight: 900,
         fontSize: '26px',
         color: valueColor,
@@ -61,19 +62,19 @@ export function PlayerStats() {
   return (
     <div className="arcade-panel" style={{ overflow: 'hidden' }}>
       <div className="panel-label" style={{ borderRadius: '4px 4px 0 0' }}>
-        Player Stats
+        <Zap size={13} strokeWidth={2.5} style={{ flexShrink: 0 }} /> Player Stats
       </div>
       <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
         <StatBox
-          label="High Score"
+          label={<><Trophy size={11} strokeWidth={2.5} style={{ display: 'inline', marginRight: 5, verticalAlign: 'middle', flexShrink: 0 }} />High Score</>}
           value={bestScore.toLocaleString()}
           valueColor="#FFE000"
           glowColor="rgba(255,224,0,0.8)"
         />
 
         <StatBox
-          label="Current Score"
+          label={<><TrendingUp size={11} strokeWidth={2.5} style={{ display: 'inline', marginRight: 5, verticalAlign: 'middle', flexShrink: 0 }} />Score</>}
           value={score.toLocaleString()}
           valueColor="#39FF14"
           glowColor="rgba(57,255,20,0.8)"
@@ -108,8 +109,9 @@ export function PlayerStats() {
                   STREAK x{combo}
                 </div>
                 <div style={{
-                  fontFamily: 'Orbitron',
-                  fontSize: '8px',
+                  fontFamily: 'Rajdhani',
+                  fontWeight: 700,
+                  fontSize: '12px',
                   color: '#FF8C00',
                   textShadow: '0 0 6px rgba(255,140,0,0.7)',
                   letterSpacing: '0.15em',
@@ -133,9 +135,9 @@ export function PlayerStats() {
               border: '1px solid rgba(255,255,255,0.12)',
               borderRadius: '4px',
               color: isLocked ? '#3a4060' : '#4a5270',
-              fontFamily: 'Orbitron',
+              fontFamily: 'Rajdhani',
               fontWeight: 700,
-              fontSize: '8px',
+              fontSize: '13px',
               letterSpacing: '0.15em',
               textTransform: 'uppercase',
               cursor: isLocked ? 'not-allowed' : 'pointer',

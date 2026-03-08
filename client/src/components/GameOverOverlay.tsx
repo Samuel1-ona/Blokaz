@@ -50,7 +50,7 @@ export function GameOverOverlay() {
         style={{ textAlign: 'center' }}
       >
         <div style={{
-          fontFamily: 'Orbitron',
+          fontFamily: 'Audiowide',
           fontSize: '10px',
           color: '#6b7494',
           letterSpacing: '0.2em',
@@ -60,9 +60,9 @@ export function GameOverOverlay() {
           Final Score
         </div>
         <div style={{
-          fontFamily: 'Orbitron',
+          fontFamily: 'Oxanium',
           fontWeight: 900,
-          fontSize: '42px',
+          fontSize: '48px',
           color: '#39FF14',
           textShadow: '0 0 20px rgba(57,255,20,0.8), 0 0 40px rgba(57,255,20,0.3)',
           lineHeight: 1,
